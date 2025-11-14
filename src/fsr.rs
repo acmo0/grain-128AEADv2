@@ -1,6 +1,7 @@
 use crate::utils::{
     get_ith_bit,
-    evaluate_poly
+    evaluate_poly,
+    get_byte_at_bit,
 };
 
 const GRAIN_NFSR_FB_POLY: [u128; 15] = [
@@ -50,7 +51,7 @@ impl GrainLfsr {
         }
     }
 }
-
+ 
 
 impl Xfsr<u8> for GrainLfsr {
     /// Update the grain's LFSR state according to the spec :
@@ -59,17 +60,17 @@ impl Xfsr<u8> for GrainLfsr {
     /// - riht shift the remaining bits by one 
     /// (i.e s126 = s127, ..., s0 = s1)
     fn feedback_function(&mut self) -> u8 {
-        let mut s: u8 = get_ith_bit(&self.state, 0);
-        s ^= get_ith_bit(&self.state, 7);
-        s ^= get_ith_bit(&self.state, 38);
-        s ^= get_ith_bit(&self.state, 70);
-        s ^ get_ith_bit(&self.state, 96)
+        get_byte_at_bit(&self.state, 0) ^
+            get_byte_at_bit(&self.state, 7) ^
+            get_byte_at_bit(&self.state, 38) ^
+            get_byte_at_bit(&self.state, 70) ^
+            get_byte_at_bit(&self.state, 96)
     }
 
     fn clock(&mut self) -> u8 {
-        let output = self.feedback_function();
+        let output = (self.state & 0xff) as u8;
 
-        self.state = (self.state >> 1) | ((output as u128) << 127);
+        self.state = (self.state >> 8) | ((self.feedback_function() as u128) << 120);
 
         output
     }
@@ -88,8 +89,8 @@ impl GrainNfsr {
         }
     }
 
-    pub fn xor_last_bit(&mut self, bit: u8) -> () {
-        self.state ^= (bit as u128) << 127;
+    pub fn xor_last_byte(&mut self, byte: u8) -> () {
+        self.state ^= (byte as u128) << 120;
     }
 }
 
@@ -98,13 +99,40 @@ impl Xfsr<u8> for GrainNfsr {
     /// EXCEPT that the feedback bit is not xored with
     /// the bit from the grain LFSR output
     fn feedback_function(&mut self) -> u8 {
-        evaluate_poly(GRAIN_NFSR_FB_POLY, &self.state)
+        get_byte_at_bit(&self.state, 0) ^
+            get_byte_at_bit(&self.state, 26) ^
+            get_byte_at_bit(&self.state, 56) ^
+            get_byte_at_bit(&self.state, 91) ^
+            get_byte_at_bit(&self.state, 96) ^
+            get_byte_at_bit(&self.state, 3) & get_byte_at_bit(&self.state, 67) ^
+            get_byte_at_bit(&self.state, 11) & get_byte_at_bit(&self.state, 13) ^
+            get_byte_at_bit(&self.state, 17) & get_byte_at_bit(&self.state, 18) ^
+            get_byte_at_bit(&self.state, 27) & get_byte_at_bit(&self.state, 59) ^
+            get_byte_at_bit(&self.state, 40) & get_byte_at_bit(&self.state, 48) ^
+            get_byte_at_bit(&self.state, 61) & get_byte_at_bit(&self.state, 65) ^
+            get_byte_at_bit(&self.state, 68) & get_byte_at_bit(&self.state, 84) ^
+            (
+                get_byte_at_bit(&self.state, 22) &
+                get_byte_at_bit(&self.state, 24) &
+                get_byte_at_bit(&self.state, 65)
+            ) ^
+            (
+                get_byte_at_bit(&self.state, 70) &
+                get_byte_at_bit(&self.state, 78) &
+                get_byte_at_bit(&self.state, 82)
+            ) ^
+            (
+                get_byte_at_bit(&self.state, 88) &
+                get_byte_at_bit(&self.state, 92) &
+                get_byte_at_bit(&self.state, 93) &
+                get_byte_at_bit(&self.state, 95)
+            )
     }
 
     fn clock(&mut self) -> u8 {
-        let output = self.feedback_function();
+        let output = self.state & 0xff;
 
-        self.state = (self.state << 1) | (output as u128);
+        self.state = (self.state >> 8) | ((self.feedback_function() << 120) as u128);
 
         output
     }

@@ -10,19 +10,14 @@
 pub use cipher;
 
 use cipher::{
-    Block, BlockSizeUser, InnerIvInit, IvSizeUser, KeyInit, KeySizeUser, ParBlocksSizeUser,
-    StreamCipherBackend, StreamCipherClosure, StreamCipherCore, StreamCipherCoreWrapper,
-    consts::{U1, U8, U16},
-    crypto_common::InnerUser,
+    AlgorithmName, Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyIvInit, KeySizeUser,
+    ParBlocksSizeUser, StreamCipherBackend, StreamCipherClosure, StreamCipherCore,
+    StreamCipherCoreWrapper,
+    consts::{U12, U16},
 };
 
 #[cfg(feature = "zeroize")]
 use cipher::zeroize::{Zeroize, ZeroizeOnDrop};
-
-
-// Defining cipher key.iv size
-const KEY_BYTE_LEN: usize = 16;
-const IV_BYTE_LEN: usize = 12;
 
 
 
