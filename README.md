@@ -8,5 +8,5 @@ Provide an efficient implementation of the *grain-128AEADv2* algorithm without R
 
 ## TODO
 - Implement Rust Crypto traits for Grain
-- Improve unit tests
-- Improve/crate doc
+- Unit test LFSR/NFSR
+- Unit test grain code
