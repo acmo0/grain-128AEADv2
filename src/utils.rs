@@ -55,10 +55,7 @@ where
 mod tests { 
     use super::*;
 
-    use rand::prelude::*;
     use proptest::prelude::*;
-    use num::traits::{Unsigned, One, ToPrimitive};
-    use core::fmt::Debug;
     
     extern crate std;
     use std::mem;

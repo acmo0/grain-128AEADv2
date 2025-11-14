@@ -147,25 +147,3 @@ impl Accumulator<u8> for GrainAuthRegister {
 }
 
 
-//fn get_ith_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive>(value: &T, index: usize) -> u8
-//where 
-//    for<'a> &'a T: Shr<usize, Output = T> 
-//{
-//    ((value >> index) & T::one()).to_u8()?
-//}
-
-//fn apply_poly<const N: usize, T: Unsigned + BitAnd + BitXor>(value: &T, poly: &[[usize; N]]) -> u8 where &T: Shr<usize> {
-//    let mut output: u8 = 0;
-//
-//    for monomial_index in 0..len(poly) {
-//        let mut evaluated_mon: u8 = 0;
-//        
-//        for i in 0..N {
-//            evaluated_mon = evaluated_mon & get_ith_bit(value, poly[monomial_index][i]);
-//        }
-//
-//        output = output ^ evaluated_mon;
-//    }
-//
-//    output
-//}
