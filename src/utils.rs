@@ -5,7 +5,7 @@ use core::ops::{
 };
 use core::cmp::PartialEq;
 
-/// Returns the i-th bit of an unsigned integer
+/// Returns the i-th bit of an unsigned integer. Mostly useful to bootstrap/make more comprehensive code.
 pub fn get_ith_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive>(value: &T, index: usize) -> u8
 where 
     for<'a> &'a T: Shr<usize, Output = T> 
@@ -56,10 +56,19 @@ mod tests {
     use super::*;
 
     use rand::prelude::*;
+    use proptest::prelude::*;
     use num::traits::{Unsigned, One, ToPrimitive};
     use core::fmt::Debug;
+    
     extern crate std;
+    use std::mem;
 
+    // ********************************
+    // Tests for `get_ith_bit` function
+    // ********************************
+    // We can test every values for u8 and u16 to assert that
+    // our function get_ith_bit is working well. We can't do
+    // the same for "bigger" types (e.g u32, .., u128).
     #[test]
     fn test_get_ith_bit_u8() {
         for i in 0..=255u8 { 
@@ -69,44 +78,64 @@ mod tests {
         }
     }
    
-   // #[test]
-   // fn test_get_ith_bit_u16() {  
-   //     for _i in 0..NTRIES {
-   //         let random: u16 = rand::random(); 
-   //         let index: usize = rand::random_range(0..16) as usize;
+    #[test]
+    fn test_get_ith_bit_u16() {  
+        for i in 0..=65533u16 {
+            for k in 0..16 {
+                assert_eq!(get_ith_bit(&i, k), ((i >> k) & 1) as u8);
+            }
+        }
+    }
 
-   //         assert_eq!(get_ith_bit(&random, index), ((random >> index) & 1) as u8);
-   //     }
-   // }
+    // Define a macro to generate a test function base on proptest module
+    // to perform unit/property tests on u32, ..., u128. 
+    macro_rules! test_get_ith_bit_function_for {
+        ($name:tt, $type: ty) => {
+            proptest! {
+                #[test]
+                fn $name(i in any::<$type>(), k in 0..(mem::size_of::<$type>())) {
+                    assert_eq!(get_ith_bit(&i, k), ((i >> k) & 1) as u8);
+                }
+            }
+        }
+    }
 
-   // #[test]
-   // fn test_get_ith_bit_u32() {  
-   //     for _i in 0..NTRIES {
-   //         let random: u32 = rand::random(); 
-   //         let index: usize = rand::random_range(0..32) as usize;
+    // Use the previous defined macro to generate the tests for u32, ..., u128
+    test_get_ith_bit_function_for!(test_get_ith_bit_u32, u32);
+    test_get_ith_bit_function_for!(test_get_ith_bit_u64, u64);
+    test_get_ith_bit_function_for!(test_get_ith_bit_u128, u128);
+    
 
-   //         assert_eq!(get_ith_bit(&random, index), ((random >> index) & 1) as u8);
-   //     }
-   // }
+    // ********************************
+    // Tests for `evaluate_poly` function
+    // ********************************
+    // Define a macro to generate a test function based on proptest module
+    // to perform unit/property tests of evaluate_poly.
+    macro_rules! test_evaluate_poly_for {
+        ($name:tt, $type: ty) => {
+            proptest! {
+                #[test]
+                fn $name(poly in 0..(<$type>::MAX - 1), value in 0..(<$type>::MAX - 1)) {
+                    std::println!("{:?}", &value);
+                    // This evaluation should always equals zero bc value < 0xff...ff
+                    assert_eq!(evaluate_poly([<$type>::MAX], &value), 0u8);
 
-   // #[test]
-   // fn test_get_ith_bit_u64() {  
-   //     for _i in 0..NTRIES {
-   //         let random: u64 = rand::random(); 
-   //         let index: usize = rand::random_range(0..64) as usize;
+                    // this equals the parity of the low 8 bits
+                    assert_eq!(
+                        evaluate_poly([1, 2, 4, 8, 16, 32, 64, 128], &value),
+                        ((value & 0xff).count_ones() % 2) as u8
+                    );
 
-   //         assert_eq!(get_ith_bit(&random, index), ((random >> index) & 1) as u8);
-   //     }
-   // }
+                    assert_eq!(evaluate_poly([poly], &value), ((poly & value) == poly )as u8);
+                }
+            }
+        }
+    }
 
-   // #[test]
-   // fn test_get_ith_bit_u128() {  
-   //     for _i in 0..NTRIES {
-   //         let random: u128 = rand::random(); 
-   //         let index: usize = rand::random_range(0..128) as usize;
-
-   //         assert_eq!(get_ith_bit(&random, index), ((random >> index) & 1) as u8);
-   //     }
-   // }
+    test_evaluate_poly_for!(test_evaluate_poly_u8, u8);
+    test_evaluate_poly_for!(test_evaluate_poly_u16, u16);
+    test_evaluate_poly_for!(test_evaluate_poly_u32, u32);
+    test_evaluate_poly_for!(test_evaluate_poly_u64, u64);
+    test_evaluate_poly_for!(test_evaluate_poly_u128, u128);
 
 }

@@ -11,7 +11,6 @@ use crate::utils::{
 };
 
 
-
 const GRAIN_PRE_OUT_POLYNOMIAL: [u16; 5] = [
     0b000000011,
     0b000001100,

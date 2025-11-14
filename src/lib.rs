@@ -52,7 +52,7 @@ mod tests {
         let mut glfsr = GrainLfsr::new(123612162141);
 
         for _k in 0..100000000 {
-            acc.accumulate(glfsr.clock());
+            acc.accumulate(&glfsr.clock());
         }
     }
 }
