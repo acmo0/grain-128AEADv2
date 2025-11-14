@@ -69,7 +69,7 @@ impl Xfsr<u8> for GrainLfsr {
     fn clock(&mut self) -> u8 {
         let output = self.feedback_function();
 
-        self.state = (self.state << 1) | (output as u128);
+        self.state = (self.state >> 1) | ((output as u128) << 127);
 
         output
     }

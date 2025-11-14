@@ -1,4 +1,4 @@
-use num::traits::{Unsigned, One, ToPrimitive};
+use num::traits::{Unsigned, One, ToPrimitive, FromPrimitive};
 use core::ops::{
     BitAnd,
     Shr,
@@ -13,6 +13,17 @@ where
     ((value >> index) & T::one()).to_u8().expect("Unable extract the given bit index")
 }
 
+
+/// Extract the next 8 bits starting from a given position.
+pub fn get_byte_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u8
+where 
+    for<'a> &'a T: Shr<usize, Output = T> 
+{
+    (
+        (value >> index) & T::from_u8(0xff).expect("Unable to get the given byte")
+    ).to_u8()
+     .expect("Unable extract the given byte index")
+}
 
 /// Evaluate a multivariate polynomial over F2^n for n less or equals to 128.
 ///
@@ -102,6 +113,29 @@ mod tests {
     test_get_ith_bit_function_for!(test_get_ith_bit_u64, u64);
     test_get_ith_bit_function_for!(test_get_ith_bit_u128, u128);
     
+
+    // ********************************
+    // Tests for `get_byte_at_bit` function
+    // ********************************
+    // Define a macro to generate a test function based on proptest module
+    // to perform unit/property tests of evaluate_poly.
+    macro_rules! test_get_byte_at_bit_for {
+        ($name:tt, $type: ty) => {
+            proptest! {
+                #[test]
+                fn $name(value in 0..(<$type>::MAX), pos in 0..(mem::size_of::<$type>())) {
+                    assert_eq!(get_byte_at_bit(&value, pos), ((value >> pos) & 0xff) as u8);
+                }
+            }
+        }
+    }
+
+    test_get_byte_at_bit_for!(test_get_byte_at_bit_u8, u8);
+    test_get_byte_at_bit_for!(test_get_byte_at_bit_u16, u16);
+    test_get_byte_at_bit_for!(test_get_byte_at_bit_u32, u32);
+    test_get_byte_at_bit_for!(test_get_byte_at_bit_u64, u64);
+    test_get_byte_at_bit_for!(test_get_byte_at_bit_u128, u128);
+
 
     // ********************************
     // Tests for `evaluate_poly` function

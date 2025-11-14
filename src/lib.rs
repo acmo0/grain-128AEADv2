@@ -1,26 +1,32 @@
 #![no_std]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg",
     html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg"
 )]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
+#![warn(missing_docs, rust_2018_idioms)]
 
+pub use cipher;
 
-//#![warn(missing_docs, rust_2018_idioms)]
-//
-//pub use cipher;
-//
-//use cipher::{
-//    AlgorithmName, Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyIvInit, KeySizeUser,
-//    ParBlocksSizeUser, StreamCipherBackend, StreamCipherClosure, StreamCipherCore,
-//    StreamCipherCoreWrapper,
-//    consts::{U12, U16},
-//};
-//use core::fmt;
+use cipher::{
+    Block, BlockSizeUser, InnerIvInit, IvSizeUser, KeyInit, KeySizeUser, ParBlocksSizeUser,
+    StreamCipherBackend, StreamCipherClosure, StreamCipherCore, StreamCipherCoreWrapper,
+    consts::{U1, U8, U16},
+    crypto_common::InnerUser,
+};
 
 #[cfg(feature = "zeroize")]
 use cipher::zeroize::{Zeroize, ZeroizeOnDrop};
+
+
+// Defining cipher key.iv size
+const KEY_BYTE_LEN: usize = 16;
+const IV_BYTE_LEN: usize = 12;
+
+
+
+
 
 mod grain_core;
 mod fsr;
