@@ -25,6 +25,17 @@ where
      .expect("Unable extract the given byte index")
 }
 
+/// Extract the next 16 bits starting from a given position.
+pub fn get_2bytes_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u16
+where 
+    for<'a> &'a T: Shr<usize, Output = T> 
+{
+    (
+        (value >> index) & T::from_u16(0xffff).expect("Unable to get the given byte")
+    ).to_u16()
+     .expect("Unable extract the given byte index")
+}
+
 /// Evaluate a multivariate polynomial over F2^n for n less or equals to 128.
 ///
 /// For a polynomial that is defined as $P(x_1, \ldots, x_n) = \sum_j\prod_i x_i$

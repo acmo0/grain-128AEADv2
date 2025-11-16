@@ -26,6 +26,7 @@ use cipher::zeroize::{Zeroize, ZeroizeOnDrop};
 mod grain_core;
 mod fsr;
 mod utils;
+mod traits;
 
 #[cfg(test)]
 mod tests {
