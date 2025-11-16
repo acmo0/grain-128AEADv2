@@ -149,6 +149,27 @@ mod tests {
 
 
     // ********************************
+    // Tests for `get_2bytes_at_bit` function
+    // ********************************
+    // Define a macro to generate a test function based on proptest module
+    // to perform unit/property tests of evaluate_poly.
+    macro_rules! test_get_2bytes_at_bit_for {
+        ($name:tt, $type: ty) => {
+            proptest! {
+                #[test]
+                fn $name(value in 0..(<$type>::MAX), pos in 0..(mem::size_of::<$type>())) {
+                    assert_eq!(get_2bytes_at_bit(&value, pos), ((value >> pos) & 0xffff) as u16);
+                }
+            }
+        }
+    }
+
+    test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u16, u16);
+    test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u32, u32);
+    test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u64, u64);
+    test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u128, u128);
+
+    // ********************************
     // Tests for `evaluate_poly` function
     // ********************************
     // Define a macro to generate a test function based on proptest module

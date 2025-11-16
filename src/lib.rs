@@ -20,9 +20,6 @@ use cipher::{
 use cipher::zeroize::{Zeroize, ZeroizeOnDrop};
 
 
-
-
-
 mod grain_core;
 mod fsr;
 mod utils;
@@ -32,11 +29,14 @@ mod traits;
 mod tests {
     use super::fsr::{
         GrainLfsr,
-        Xfsr,
-        Accumulator,
         GrainNfsr,
         GrainAuthRegister,
         GrainAuthAccumulator,
+    };
+
+    use super::traits::{
+        Xfsr,
+        Accumulator,
     };
 
     #[test]
@@ -44,7 +44,7 @@ mod tests {
         let mut glfsr = GrainLfsr::new(123612162141);
 
         for _i in 0..1 {
-            glfsr.clock();
+            <GrainLfsr as Xfsr<u8>>::clock(&mut glfsr);
         }
     }
     
@@ -54,10 +54,7 @@ mod tests {
         let mut glfsr = GrainLfsr::new(123612162141);
 
         for _k in 0..100000000 {
-            acc.accumulate(&glfsr.clock());
+            acc.accumulate(&<GrainLfsr as Xfsr<u8>>::clock(&mut glfsr));
         }
     }
 }
-
-
-

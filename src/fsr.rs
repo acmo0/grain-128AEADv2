@@ -114,7 +114,7 @@ impl Xfsr<u8> for GrainNfsr {
     /// EXCEPT that the feedback bit is not xored with
     /// the bit from the grain LFSR output
     fn feedback_function(&self) -> u128 {
-        (get_byte_at_bit(&self.state, 0) ^
+        let output = (get_byte_at_bit(&self.state, 0) ^
             get_byte_at_bit(&self.state, 26) ^
             get_byte_at_bit(&self.state, 56) ^
             get_byte_at_bit(&self.state, 91) ^
@@ -141,7 +141,11 @@ impl Xfsr<u8> for GrainNfsr {
                 get_byte_at_bit(&self.state, 92) &
                 get_byte_at_bit(&self.state, 93) &
                 get_byte_at_bit(&self.state, 95)
-            )) as u128
+            )) as u128;
+
+        debug_assert!(output < (1u128 << 8));
+
+        output
     }
 
 }
@@ -158,7 +162,7 @@ impl Xfsr<u16> for GrainNfsr {
     /// EXCEPT that the feedback bit is not xored with
     /// the bit from the grain LFSR output
     fn feedback_function(&self) -> u128 {
-        (get_2bytes_at_bit(&self.state, 0) ^
+        let output = (get_2bytes_at_bit(&self.state, 0) ^
             get_2bytes_at_bit(&self.state, 26) ^
             get_2bytes_at_bit(&self.state, 56) ^
             get_2bytes_at_bit(&self.state, 91) ^
@@ -185,7 +189,10 @@ impl Xfsr<u16> for GrainNfsr {
                 get_2bytes_at_bit(&self.state, 92) &
                 get_2bytes_at_bit(&self.state, 93) &
                 get_2bytes_at_bit(&self.state, 95)
-            )) as u128
+            )) as u128;
+
+        debug_assert!(output < (1u128 << 16));
+        output
     }
 
 }
@@ -195,10 +202,28 @@ pub struct GrainAuthAccumulator {
     state: u64,
 }
 
+
 impl Accumulator<u8> for GrainAuthAccumulator {
     fn accumulate(&mut self, new: &u8) -> u8 {
         let output = get_ith_bit(&self.state, 63);
-        self.state <<= 1 | new;
+        self.state <<= 1;
+        self.state |= *new as u64;
+
+        output
+    }
+
+    fn accumulate_u8(&mut self, new: &u8) -> u8 {
+        let output = ((self.state >> 56) & 0xff) as u8;
+        self.state <<= 8;
+        self.state |= *new as u64;
+
+        output
+    }
+
+    fn accumulate_u16(&mut self, new: &u16) -> u16 {
+        let output = ((self.state >> 48) & 0xff) as u16;
+        self.state <<= 16;
+        self.state |= *new as u64;
 
         output
     }
@@ -216,7 +241,24 @@ pub struct GrainAuthRegister {
 impl Accumulator<u8> for GrainAuthRegister {
     fn accumulate(&mut self, new: &u8) -> u8 {
         let output = get_ith_bit(&self.state, 63);
-        self.state <<= 1 | new;
+        self.state <<= 1;
+        self.state |= *new as u64;
+
+        output
+    }
+
+    fn accumulate_u8(&mut self, new: &u8) -> u8 {
+        let output = ((self.state >> 56) & 0xff) as u8;
+        self.state <<= 8;
+        self.state |= *new as u64;
+
+        output
+    }
+
+    fn accumulate_u16(&mut self, new: &u16) -> u16 {
+        let output = ((self.state >> 48) & 0xff) as u16;
+        self.state <<= 16;
+        self.state |= *new as u64;
 
         output
     }
@@ -225,5 +267,3 @@ impl Accumulator<u8> for GrainAuthRegister {
         GrainAuthRegister { state: 0u64 }
     }
 }
-
-

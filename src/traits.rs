@@ -34,5 +34,7 @@ pub trait Xfsr<T: PrimInt> {
 
 pub trait Accumulator<T> {
     fn accumulate(&mut self, new: &T) -> T;
+    fn accumulate_u8(&mut self, new: &u8) -> u8;
+    fn accumulate_u16(&mut self, new: &u16) -> u16;
     fn new() -> Self;
 }
