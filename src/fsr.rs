@@ -199,7 +199,7 @@ impl Xfsr<u16> for GrainNfsr {
 
 
 pub struct GrainAuthAccumulator {
-    state: u64,
+    pub(crate) state: u64,
 }
 
 
@@ -235,7 +235,7 @@ impl Accumulator<u8> for GrainAuthAccumulator {
 
 
 pub struct GrainAuthRegister {
-    state: u64,
+    pub(crate) state: u64,
 }
 
 impl Accumulator<u8> for GrainAuthRegister {
@@ -266,4 +266,18 @@ impl Accumulator<u8> for GrainAuthRegister {
     fn new() -> GrainAuthRegister {
         GrainAuthRegister { state: 0u64 }
     }
+}
+
+
+#[cfg(test)]
+mod tests { 
+    use super::*;
+
+    
+    const TEST_NFSR: u128 = 0x008040c020a060e0109050d030b070f0;
+    const TEST_LFSR: u128 = 0x008040c020a060e0109050d0fffffffe;
+    const TEST_ACC: u64 = 0xe34e40ce5ee7e377;
+    const TEST_REG: u64 = 0xcc48b6eb45d809ce;
+
+    
 }

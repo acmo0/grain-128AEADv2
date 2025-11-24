@@ -27,6 +27,57 @@ struct GrainCore {
 
 
 impl GrainCore {
+
+    pub fn new(key: u128, iv: u128) -> Self {
+
+        if iv >= (1u128 << 96) {
+            panic!("Unable to init Grain-128AEADv2, IV is too big (must be 24 bytes)");
+        }
+
+        let mut cipher = GrainCore {
+            lfsr: GrainLfsr::new((0x7fffffffffffffff << 96) | iv),
+            nfsr: GrainNfsr::new(key),
+            auth_accumulator: GrainAuthAccumulator::new(),
+            auth_register: GrainAuthRegister::new(),
+        };
+
+        // Clock 320 times and re-input the feedback to both LFSR and NFSR
+        for _i in 0..20 {
+            let fb: u128 = cipher.clock_u16() as u128;
+            cipher.lfsr.state ^= fb << 112;
+            cipher.nfsr.state ^= fb << 112;
+        }
+
+        // Clock 64 times and re-input the feedback to both LFSR and NFSR
+        // + re-introduce key
+        for i in 0..4 {
+            let fb: u128 = cipher.clock_u16() as u128;
+            cipher.lfsr.state ^= (fb ^ (key >> (i * 16) + 64) & 0xffff as u128) << 112;
+            cipher.nfsr.state ^= (fb ^ (key >> i * 16) & 0xffff as u128) << 112;
+        }
+
+        // Init the accumulator/register
+        let mut acc_state: u64 = 0;
+        for i in 0..4 {
+            let fb: u64 = cipher.clock_u16() as u64;
+            acc_state |= fb << i * 16
+        }
+        cipher.auth_accumulator.state = acc_state;
+
+        let mut reg_state: u64 = 0;
+        for i in 0..4 {
+            let fb: u64 = cipher.clock_u16() as u64;
+            reg_state |= fb << i * 16
+        }
+        cipher.auth_register.state = acc_state;
+
+        for _i in 0..8 {
+            cipher.clock_u16()
+        }
+        
+        cipher
+    }
+
     pub fn clock_u8(&mut self) -> u8 {
         let lfsr_output: u8 = self.lfsr.clock();
         let nfsr_output: u8 = self.nfsr.clock();
