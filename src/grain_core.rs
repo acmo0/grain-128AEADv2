@@ -71,10 +71,11 @@ impl GrainCore {
         }
         cipher.auth_register.state = acc_state;
 
+        // Clock 128 times
         for _i in 0..8 {
-            cipher.clock_u16()
+            cipher.clock_u16();
         }
-        
+
         cipher
     }
 
