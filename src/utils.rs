@@ -4,6 +4,7 @@ use core::ops::{
     Shr,
 };
 use core::cmp::PartialEq;
+use alloc::vec::Vec;
 
 /// Returns the i-th bit of an unsigned integer. Mostly useful to bootstrap/make more comprehensive code.
 pub fn get_ith_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive>(value: &T, index: usize) -> u8
@@ -71,6 +72,31 @@ where
 
     output
 }
+
+
+/// Encode a length according to Grain spec
+pub fn len_encode(length: usize) -> Vec<u8> {
+    if length <= 127 {
+        vec![length as u8]
+    } else {
+        let lenght_bytes = length.to_be_bytes();
+        let mut size_len = 0usize;
+
+        while lenght_bytes[size_len] == 0 {
+            size_len += 1
+        }
+
+
+        let mut encoded = vec![0x80u8 + (size_len as u8)];
+        for i in size_len..lenght_bytes.len() {
+            encoded.push(lenght_bytes[i])
+        }
+        encoded
+    }
+
+    
+}
+
 
 
 #[cfg(test)]
@@ -179,7 +205,7 @@ mod tests {
             proptest! {
                 #[test]
                 fn $name(poly in 0..(<$type>::MAX - 1), value in 0..(<$type>::MAX - 1)) {
-                    std::println!("{:?}", &value);
+                    //std::println!("{:?}", &value);
                     // This evaluation should always equals zero bc value < 0xff...ff
                     assert_eq!(evaluate_poly([<$type>::MAX], &value), 0u8);
 

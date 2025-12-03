@@ -35,7 +35,87 @@ pub trait Xfsr<T: PrimInt> {
 
 pub trait Accumulator<T> {
     fn accumulate(&mut self, new: &T) -> T;
-    fn accumulate_u8(&mut self, new: &u8) -> u8;
-    fn accumulate_u16(&mut self, new: &u16) -> u16;
     fn new() -> Self;
+}
+
+
+#[cfg(test)]
+mod tests { 
+    use super::*;
+    use crate::utils;
+    use proptest::prelude::*;
+    
+    extern crate std;
+    use std::mem;
+
+    struct Lfsr {
+        pub(crate) state: u128,
+    }
+
+    struct Nfsr {
+        pub(crate) state: u128,
+    }
+
+    impl Xfsr<u8> for Lfsr {
+        #[inline(always)]
+        fn get_state(&self) -> u128 {
+            self.state
+        }
+        #[inline(always)]
+        fn set_state(&mut self, new_value: u128) {
+            self.state = new_value
+        }
+        #[inline(always)]
+        fn feedback_function(&self) -> u128 {
+            (utils::get_byte_at_bit(&self.state, 0) ^
+                utils::get_byte_at_bit(&self.state, 4) ^
+                utils::get_byte_at_bit(&self.state, 7) ^
+                utils::get_byte_at_bit(&self.state, 33)) as u128
+        }
+    }
+
+    impl Xfsr<u8> for Nfsr {
+        #[inline(always)]
+        fn get_state(&self) -> u128 {
+            self.state
+        }
+        #[inline(always)]
+        fn set_state(&mut self, new_value: u128) {
+            self.state = new_value
+        }
+        #[inline(always)]
+        fn feedback_function(&self) -> u128 {
+            ((
+                utils::get_byte_at_bit(&self.state, 0) &
+                utils::get_byte_at_bit(&self.state, 4)
+            ) ^
+            (
+                utils::get_byte_at_bit(&self.state, 7) &
+                utils::get_byte_at_bit(&self.state, 33)
+            )) as u128
+        }
+    }
+    
+
+    #[test]
+    fn test_lfsr() {
+
+        let mut lfsr = Lfsr{state: 827238322173621362173923281382u128};
+
+        let output: u8 = lfsr.clock();
+        
+        assert_eq!(output, 230);
+        assert_eq!(lfsr.state, 45193751859918539374720148495523603401);
+    }
+
+    #[test]
+    fn test_nfsr() {
+
+        let mut nfsr = Nfsr{state: 827238322173621362173923281382u128};
+
+        let output: u8 = nfsr.clock();
+        
+        assert_eq!(output, 230);
+        assert_eq!(nfsr.state, 9304595973725810806317357867954299849);
+    }
 }

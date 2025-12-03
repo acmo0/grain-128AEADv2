@@ -1,4 +1,4 @@
-#![no_std]
+//#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg",
@@ -6,6 +6,11 @@
 )]
 #![deny(unsafe_code)]
 #![warn(missing_docs, rust_2018_idioms)]
+
+
+
+#[macro_use]
+extern crate alloc;
 
 pub use cipher;
 
@@ -39,16 +44,17 @@ mod tests {
         Accumulator,
     };
 
-    #[test]
+/*    #[test]
     fn it_works() {
         let mut glfsr = GrainLfsr::new(123612162141);
 
         for _i in 0..1 {
             <GrainLfsr as Xfsr<u8>>::clock(&mut glfsr);
         }
-    }
+    }*/
     
-    #[test]
+
+/*    #[test]
     fn test_acc() {
         let mut acc = GrainAuthRegister::new();
         let mut glfsr = GrainLfsr::new(123612162141);
@@ -56,5 +62,5 @@ mod tests {
         for _k in 0..100000000 {
             acc.accumulate(&<GrainLfsr as Xfsr<u8>>::clock(&mut glfsr));
         }
-    }
+    }*/
 }

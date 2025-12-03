@@ -48,6 +48,7 @@ impl Xfsr<u8> for GrainLfsr {
             get_byte_at_bit(&self.state, 7) ^
             get_byte_at_bit(&self.state, 38) ^
             get_byte_at_bit(&self.state, 70) ^
+            get_byte_at_bit(&self.state, 81) ^
             get_byte_at_bit(&self.state, 96)) as u128
     }
 }
@@ -73,6 +74,7 @@ impl Xfsr<u16> for GrainLfsr {
             get_2bytes_at_bit(&self.state, 7) ^
             get_2bytes_at_bit(&self.state, 38) ^
             get_2bytes_at_bit(&self.state, 70) ^
+            get_2bytes_at_bit(&self.state, 81) ^
             get_2bytes_at_bit(&self.state, 96)) as u128
     }
 }
@@ -129,7 +131,7 @@ impl Xfsr<u8> for GrainNfsr {
             (
                 get_byte_at_bit(&self.state, 22) &
                 get_byte_at_bit(&self.state, 24) &
-                get_byte_at_bit(&self.state, 65)
+                get_byte_at_bit(&self.state, 25)
             ) ^
             (
                 get_byte_at_bit(&self.state, 70) &
@@ -177,7 +179,7 @@ impl Xfsr<u16> for GrainNfsr {
             (
                 get_2bytes_at_bit(&self.state, 22) &
                 get_2bytes_at_bit(&self.state, 24) &
-                get_2bytes_at_bit(&self.state, 65)
+                get_2bytes_at_bit(&self.state, 25)
             ) ^
             (
                 get_2bytes_at_bit(&self.state, 70) &
@@ -212,7 +214,7 @@ impl Accumulator<u8> for GrainAuthAccumulator {
         output
     }
 
-    fn accumulate_u8(&mut self, new: &u8) -> u8 {
+/*    fn accumulate_u8(&mut self, new: &u8) -> u8 {
         let output = ((self.state >> 56) & 0xff) as u8;
         self.state <<= 8;
         self.state |= *new as u64;
@@ -227,7 +229,7 @@ impl Accumulator<u8> for GrainAuthAccumulator {
 
         output
     }
-
+*/
    fn new() -> GrainAuthAccumulator { 
        GrainAuthAccumulator { state: 0u64 } 
    }
@@ -240,14 +242,14 @@ pub struct GrainAuthRegister {
 
 impl Accumulator<u8> for GrainAuthRegister {
     fn accumulate(&mut self, new: &u8) -> u8 {
-        let output = get_ith_bit(&self.state, 63);
-        self.state <<= 1;
-        self.state |= *new as u64;
+        let output = self.state & 1;
+        self.state >>= 1;
+        self.state |= (*new as u64) << 63;
 
-        output
+        output as u8
     }
 
-    fn accumulate_u8(&mut self, new: &u8) -> u8 {
+/*    fn accumulate_u8(&mut self, new: &u8) -> u8 {
         let output = ((self.state >> 56) & 0xff) as u8;
         self.state <<= 8;
         self.state |= *new as u64;
@@ -261,7 +263,7 @@ impl Accumulator<u8> for GrainAuthRegister {
         self.state |= *new as u64;
 
         output
-    }
+    }*/
 
     fn new() -> GrainAuthRegister {
         GrainAuthRegister { state: 0u64 }
