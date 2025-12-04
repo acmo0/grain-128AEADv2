@@ -3,7 +3,6 @@ use core::ops::{
     BitAnd,
     Shr,
 };
-use core::cmp::PartialEq;
 use alloc::vec::Vec;
 
 /// Returns the i-th bit of an unsigned integer. Mostly useful to bootstrap/make more comprehensive code.

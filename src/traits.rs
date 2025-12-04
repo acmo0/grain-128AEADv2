@@ -1,5 +1,4 @@
 use num::{PrimInt};
-use core::ops::BitAnd;
 
 
 /// Trait that both LFSR and NFSR will implement

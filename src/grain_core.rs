@@ -1,6 +1,11 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
+use aead::{
+    Tag,
+    inout::InOutBuf
+};
+
 use crate::fsr::{
    GrainLfsr,
    GrainNfsr,
@@ -15,7 +20,6 @@ use crate::traits::{
 
 use crate::utils::{
     self,
-    get_ith_bit,
     get_byte_at_bit,
     get_2bytes_at_bit,
 };
@@ -45,7 +49,7 @@ impl GrainCore {
     pub fn init_with_iv(&mut self, iv: u128) {
 
         if iv >= (1u128 << 96) {
-            panic!("Unable to init Grain-128AEADv2, IV is too big (must be 24 bytes)");
+            panic!("Unable to init Grain-128AEADv2, IV is too big (must be 12 bytes)");
         }
 
         let mut clocked = 0;
@@ -93,7 +97,7 @@ impl GrainCore {
         self.auth_register.state = reg_state;
     }
 
-    pub fn clock_u8(&mut self) -> u8 {
+    /*pub fn clock_u8(&mut self) -> u8 {
         
 
         let x0 = get_byte_at_bit(&self.nfsr.state, 12);
@@ -123,7 +127,7 @@ impl GrainCore {
         self.nfsr.xor_last_byte(lfsr_output);
 
         output
-    }
+    }*/
 
     pub fn clock_u16(&mut self) -> u16 {
         let x0 = get_2bytes_at_bit(&self.nfsr.state, 12);
@@ -204,22 +208,36 @@ impl GrainCore {
         }
 
         // Add padding + encrypt/auth
-        output.push(self.encrypt_and_auth_byte(&1u8));
+        self.encrypt_and_auth_byte(&1u8);
 
         output
     }
 
-    pub fn encrypt_auth_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> Vec<u8> {
+    pub fn encrypt_auth_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
         // Init the output with the associated data encoded length
-        let mut output = {
+        let mut encoded_len = {
             if authenticated_data.len() == 0 {
-                Vec::with_capacity(authenticated_data.len() + data.len() + 9)
+                vec![0]
             } else {
                 utils::len_encode(authenticated_data.len())
 
             }
         };
-        output.reserve(authenticated_data.len() + data.len() + 9);
+        let mut output: Vec<u8> = Vec::with_capacity(authenticated_data.len() + data.len() + 9);
+
+        // Auth data
+        for b in encoded_len {
+            let keystream = self.clock_u16();
+            let auth_stream = {
+                let mut byte = 0u8;
+                for i in 0..8 {
+                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+                }
+                byte
+            };
+
+            self.auth_byte(&auth_stream, &b);
+        }
 
         // Auth data
         for b in authenticated_data {
@@ -233,12 +251,63 @@ impl GrainCore {
             };
 
             self.auth_byte(&auth_stream, &b);
-            output.push(*b);
         }
 
         output.extend(self.encrypt_auth(data));
 
-        output
+        (output, self.auth_accumulator.state.to_le_bytes())
+    }
+
+    pub fn encrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>,) -> [u8; 8] {
+        let mut tag: [u8; 8] = [0u8; 8];
+
+        // Init the output with the associated data encoded length
+        let mut encoded_len = {
+            if authenticated_data.len() == 0 {
+                vec![0]
+            } else {
+                utils::len_encode(authenticated_data.len())
+
+            }
+        };
+
+        // Auth data
+        for b in encoded_len {
+            let keystream = self.clock_u16();
+            let auth_stream = {
+                let mut byte = 0u8;
+                for i in 0..8 {
+                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+                }
+                byte
+            };
+
+            self.auth_byte(&auth_stream, &b);
+        }
+
+        // Auth data
+        for b in authenticated_data {
+            let keystream = self.clock_u16();
+            let auth_stream = {
+                let mut byte = 0u8;
+                for i in 0..8 {
+                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+                }
+                byte
+            };
+
+            self.auth_byte(&auth_stream, &b);
+        }
+
+        
+        for i in 0..data.len() {
+            let mut byte = data.get(i);
+
+            let mut out = byte.get_out();
+            out = &mut self.encrypt_and_auth_byte(byte.get_in());
+        }
+        
+        self.auth_accumulator.state.to_le_bytes()
     }
 }
 
@@ -289,6 +358,7 @@ mod tests {
         let nfsr_state = 0x81f7e0c655d035823310c278438dbc20u128;
         let acc_state = 0xe89a32b9c0461a6au128;
         let reg_state = 0xb199ade7204c6bfeu128;
+        let tag = 0x7137d5998c2de4a5u128;
 
         // Init and load keys into the cipher
         let mut cipher = GrainCore::new_with_key(0);
@@ -299,12 +369,15 @@ mod tests {
         assert_eq!(acc_state, to_test_vector(cipher.auth_accumulator.state.into(), 8));
         assert_eq!(reg_state, to_test_vector(cipher.auth_register.state.into(), 8));
         
+        cipher.encrypt_auth_aead(&[], &[]);
+        assert_eq!(tag, to_test_vector(cipher.auth_accumulator.state.into(), 8));
 
         std::println!("NFSR : 0x{:032x}", to_test_vector(cipher.nfsr.state, 16));
         std::println!("LFSR : 0x{:032x} 0x{:032x} 0x{:032x}", cipher.lfsr.state, from_test_vector(cipher.lfsr.state, 16), to_test_vector(cipher.lfsr.state, 16));
         std::println!("ACC : 0x{:016x}", to_test_vector(cipher.auth_accumulator.state.into(), 8));
         std::println!("REG : 0x{:016x}", to_test_vector(cipher.auth_register.state.into(), 8));
     }
+
     #[test]
     fn test_load_non_null() {
 
@@ -313,21 +386,31 @@ mod tests {
         let lfsr_state = 0x0e1f950d45e05087c4cd63fd00eab310u128;
         let acc_state = 0xc77202737ae7c7eeu128;
         let reg_state = 0x33126dd7a21b9073u128;
+        let enc_state = 0x96d1bda7ae11f0bau128;
+        let tag_state = 0x22b0c12039a20e28u128;
+
+        // Plaintext / authenticated data from test vectors
+        let ad = (0x0001020304050607u64).to_be_bytes();
+        let pt = (0x0001020304050607u64).to_be_bytes();
 
         // Init and load keys into the cipher
         let mut cipher = GrainCore::new_with_key(to_test_vector(0x000102030405060708090a0b0c0d0e0fu128, 16));
         cipher.init_with_iv(to_test_vector(0x000102030405060708090a0bu128, 12));
         
-        println!("{:0128b}", from_test_vector(0x000102030405060708090a0b0c0d0e0fu128, 16));
-        std::println!("NFSR : 0x{:032x}", to_test_vector(cipher.nfsr.state, 16));
-        std::println!("LFSR : 0x{:032x}", to_test_vector(cipher.lfsr.state, 16));
-        std::println!("ACC : 0x{:016x}", to_test_vector(cipher.auth_accumulator.state.into(), 8));
-        std::println!("REG : 0x{:016x}", to_test_vector(cipher.auth_register.state.into(), 8));
-
         assert_eq!(nfsr_state, to_test_vector(cipher.nfsr.state, 16));
         assert_eq!(lfsr_state, to_test_vector(cipher.lfsr.state, 16));
         assert_eq!(acc_state, to_test_vector(cipher.auth_accumulator.state.into(), 8));
         assert_eq!(reg_state, to_test_vector(cipher.auth_register.state.into(), 8));
+
+
+        let (encrypted, tag) = cipher.encrypt_auth_aead(&ad, &pt);
+
+
+        let ct: [u8; 8] = encrypted.try_into().unwrap();
+        
+        assert_eq!(enc_state, to_test_vector(u64::from_le_bytes(ct) as u128, 8));
+        assert_eq!(tag_state, to_test_vector(u64::from_le_bytes(tag) as u128, 8));
+        
     }
 
 }
