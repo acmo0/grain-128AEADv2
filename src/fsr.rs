@@ -1,6 +1,5 @@
 use crate::utils::{
     get_ith_bit,
-    evaluate_poly,
     get_byte_at_bit,
     get_2bytes_at_bit,
 };

@@ -37,43 +37,6 @@ where
      .expect("Unable extract the given byte index")
 }
 
-/// Evaluate a multivariate polynomial over F2^n for n less or equals to 128.
-///
-/// For a polynomial that is defined as $P(x_1, \ldots, x_n) = \sum_j\prod_i x_i$
-/// we represent the $\prod_i x_i$ with the integer where the (i-1)-th bit is set to 1
-/// if and only if $x_i$ appears in the product. Each product of the sum should be
-/// added in an array.
-///
-/// # Example
-///
-/// Let say you want to evaluate $P(x_1, \ldots, x_4) = x_1 + x_4 + x_2x_3 + x_1x_2x_3x_4$ :
-///
-/// ```rust
-/// let poly: [u8; 4] = [
-///     0b00000001,
-///     0b00001000,
-///     0b00000110,
-///     0b00001111
-/// ];
-///
-/// let p2 = evaluate_poly(poly, 2u8);
-/// ```
-pub fn evaluate_poly<T: PartialEq, const N: usize>(polynomial: [T; N], value: &T) -> u8
-where
-    for<'a, 'b> &'a T: BitAnd<&'b T, Output=T>
-{
-    let mut output: u8 = 0;
-
-    for monomial in polynomial.iter() {
-        if &(monomial & value) == monomial {
-            output ^= 1u8;
-        }
-    }
-
-    output
-}
-
-
 /// Encode a length according to Grain spec
 pub fn len_encode(length: usize) -> Vec<u8> {
     if length <= 127 {
@@ -194,37 +157,5 @@ mod tests {
     test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u32, u32);
     test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u64, u64);
     test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u128, u128);
-
-    // ********************************
-    // Tests for `evaluate_poly` function
-    // ********************************
-    // Define a macro to generate a test function based on proptest module
-    // to perform unit/property tests of evaluate_poly.
-    macro_rules! test_evaluate_poly_for {
-        ($name:tt, $type: ty) => {
-            proptest! {
-                #[test]
-                fn $name(poly in 0..(<$type>::MAX - 1), value in 0..(<$type>::MAX - 1)) {
-                    //std::println!("{:?}", &value);
-                    // This evaluation should always equals zero bc value < 0xff...ff
-                    assert_eq!(evaluate_poly([<$type>::MAX], &value), 0u8);
-
-                    // this equals the parity of the low 8 bits
-                    assert_eq!(
-                        evaluate_poly([1, 2, 4, 8, 16, 32, 64, 128], &value),
-                        ((value & 0xff).count_ones() % 2) as u8
-                    );
-
-                    assert_eq!(evaluate_poly([poly], &value), ((poly & value) == poly )as u8);
-                }
-            }
-        }
-    }
-
-    test_evaluate_poly_for!(test_evaluate_poly_u8, u8);
-    test_evaluate_poly_for!(test_evaluate_poly_u16, u16);
-    test_evaluate_poly_for!(test_evaluate_poly_u32, u32);
-    test_evaluate_poly_for!(test_evaluate_poly_u64, u64);
-    test_evaluate_poly_for!(test_evaluate_poly_u128, u128);
 
 }
