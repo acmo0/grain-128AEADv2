@@ -2,7 +2,6 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use aead::{
-    Tag,
     Error,
     inout::InOutBuf
 };
@@ -21,7 +20,6 @@ use crate::traits::{
 
 use crate::utils::{
     self,
-    get_byte_at_bit,
     get_2bytes_at_bit,
 };
 
@@ -226,7 +224,7 @@ impl GrainCore {
 
     pub fn encrypt_auth_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
         // Init the output with the associated data encoded length
-        let mut encoded_len = {
+        let encoded_len = {
             if authenticated_data.len() == 0 {
                 vec![0]
             } else {
@@ -271,7 +269,7 @@ impl GrainCore {
 
     pub fn decrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8], tag: &[u8]) -> Result<Vec<u8>, Error> {
         // Init the output with the associated data encoded length
-        let mut encoded_len = {
+        let encoded_len = {
             if authenticated_data.len() == 0 {
                 vec![0]
             } else {
@@ -279,7 +277,7 @@ impl GrainCore {
 
             }
         };
-        let mut output: Vec<u8> = Vec::with_capacity(authenticated_data.len() + data.len() + 9);
+        let output: Vec<u8> = Vec::with_capacity(authenticated_data.len() + data.len() + 9);
 
         // Auth data
         for b in encoded_len {
@@ -319,10 +317,10 @@ impl GrainCore {
     }
 
     pub fn encrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>,) -> [u8; 8] {
-        let mut tag: [u8; 8] = [0u8; 8];
+        let tag: [u8; 8] = [0u8; 8];
 
         // Init the output with the associated data encoded length
-        let mut encoded_len = {
+        let encoded_len = {
             if authenticated_data.len() == 0 {
                 vec![0]
             } else {
@@ -371,10 +369,10 @@ impl GrainCore {
     }
 
     pub fn decrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>, tag: &[u8]) -> Result<(), Error> {
-        let mut tag: [u8; 8] = [0u8; 8];
+        let tag: [u8; 8] = [0u8; 8];
 
         // Init the output with the associated data encoded length
-        let mut encoded_len = {
+        let encoded_len = {
             if authenticated_data.len() == 0 {
                 vec![0]
             } else {

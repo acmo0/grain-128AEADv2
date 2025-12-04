@@ -16,7 +16,6 @@ pub use cipher;
 
 use cipher::{
     BlockSizeUser, IvSizeUser,
-    StreamCipherCoreWrapper,
     consts::{U1, U8, U12, U16}
 };
 
