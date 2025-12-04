@@ -28,7 +28,7 @@ impl GrainLfsr {
 
 /// Clock eight bits at once to speed up 
 /// keystream & authentication stream generation.
-impl Xfsr<u8> for GrainLfsr {
+/*impl Xfsr<u8> for GrainLfsr {
     fn get_state(&self) -> u128 {
         self.state
     }
@@ -50,7 +50,7 @@ impl Xfsr<u8> for GrainLfsr {
             get_byte_at_bit(&self.state, 81) ^
             get_byte_at_bit(&self.state, 96)) as u128
     }
-}
+}*/
 
 /// Clock sixteen bits at once to speed up 
 /// keystream & authentication stream generation.
@@ -103,7 +103,7 @@ impl GrainNfsr {
 }
 
 
-impl Xfsr<u8> for GrainNfsr {
+/*impl Xfsr<u8> for GrainNfsr {
     fn get_state(&self) -> u128 {
         self.state
     }
@@ -149,7 +149,7 @@ impl Xfsr<u8> for GrainNfsr {
         output
     }
 
-}
+}*/
 
 impl Xfsr<u16> for GrainNfsr {
     fn get_state(&self) -> u128 {

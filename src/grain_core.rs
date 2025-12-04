@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 
 use aead::{
     Tag,
+    Error,
     inout::InOutBuf
 };
 
@@ -97,38 +98,6 @@ impl GrainCore {
         self.auth_register.state = reg_state;
     }
 
-    /*pub fn clock_u8(&mut self) -> u8 {
-        
-
-        let x0 = get_byte_at_bit(&self.nfsr.state, 12);
-        let x1 = get_byte_at_bit(&self.lfsr.state, 8);
-        let x2 = get_byte_at_bit(&self.lfsr.state, 13);
-        let x3 = get_byte_at_bit(&self.lfsr.state, 20);
-        let x4 = get_byte_at_bit(&self.nfsr.state, 95);
-        let x5 = get_byte_at_bit(&self.lfsr.state, 42);
-        let x6 = get_byte_at_bit(&self.lfsr.state, 60);
-        let x7 = get_byte_at_bit(&self.lfsr.state, 79);
-        let x8 = get_byte_at_bit(&self.lfsr.state, 94);
-        
-
-        let output = (x0 & x1) ^ (x2 & x3) ^ (x4 & x5) ^ (x6 & x7) ^ (x0 & x4 & x8) ^
-            get_byte_at_bit(&self.lfsr.state, 93) ^
-            get_byte_at_bit(&self.nfsr.state, 2)  ^
-            get_byte_at_bit(&self.nfsr.state, 15) ^
-            get_byte_at_bit(&self.nfsr.state, 36) ^
-            get_byte_at_bit(&self.nfsr.state, 45) ^
-            get_byte_at_bit(&self.nfsr.state, 64) ^
-            get_byte_at_bit(&self.nfsr.state, 73) ^
-            get_byte_at_bit(&self.nfsr.state, 89);
-
-        let lfsr_output: u8 = self.lfsr.clock();
-        let nfsr_output: u8 = self.nfsr.clock();
-
-        self.nfsr.xor_last_byte(lfsr_output);
-
-        output
-    }*/
-
     pub fn clock_u16(&mut self) -> u16 {
         let x0 = get_2bytes_at_bit(&self.nfsr.state, 12);
         let x1 = get_2bytes_at_bit(&self.lfsr.state, 8);
@@ -189,6 +158,35 @@ impl GrainCore {
         
     }
 
+    fn decrypt_and_auth_byte(&mut self, data: &u8) -> u8 {
+        let keystream = self.clock_u16();
+
+        // Extract keystream (at even indexes)
+        let encrypt_stream = {
+            let mut byte = 0u8;
+            for i in 0..8 {
+                byte |= (((keystream >> (i << 1)) & 1) << i) as u8; 
+            }
+            byte
+        };
+
+        let auth_stream = {
+            let mut byte = 0u8;
+            for i in 0..8 {
+                byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+            }
+            byte
+        };
+
+        let output = data ^ encrypt_stream;
+
+        self.auth_byte(&auth_stream, &output);
+
+        output
+        
+    }
+
+
     fn auth_byte(&mut self, auth_stream: &u8, data: &u8) {
         // Update the auth register
         for i in 0..8 {
@@ -209,6 +207,19 @@ impl GrainCore {
 
         // Add padding + encrypt/auth
         self.encrypt_and_auth_byte(&1u8);
+
+        output
+    }
+
+    pub fn decrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
+        let mut output: Vec<u8> = Vec::with_capacity(data.len() + 1);
+
+        for b in data {
+            output.push(self.encrypt_and_auth_byte(&b));
+        }
+
+        // Add padding + encrypt/auth
+        self.decrypt_and_auth_byte(&1u8);
 
         output
     }
@@ -256,6 +267,55 @@ impl GrainCore {
         output.extend(self.encrypt_auth(data));
 
         (output, self.auth_accumulator.state.to_le_bytes())
+    }
+
+    pub fn decrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8], tag: &[u8]) -> Result<Vec<u8>, Error> {
+        // Init the output with the associated data encoded length
+        let mut encoded_len = {
+            if authenticated_data.len() == 0 {
+                vec![0]
+            } else {
+                utils::len_encode(authenticated_data.len())
+
+            }
+        };
+        let mut output: Vec<u8> = Vec::with_capacity(authenticated_data.len() + data.len() + 9);
+
+        // Auth data
+        for b in encoded_len {
+            let keystream = self.clock_u16();
+            let auth_stream = {
+                let mut byte = 0u8;
+                for i in 0..8 {
+                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+                }
+                byte
+            };
+
+            self.auth_byte(&auth_stream, &b);
+        }
+
+        // Auth data
+        for b in authenticated_data {
+            let keystream = self.clock_u16();
+            let auth_stream = {
+                let mut byte = 0u8;
+                for i in 0..8 {
+                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+                }
+                byte
+            };
+
+            self.auth_byte(&auth_stream, &b);
+        }
+
+        let output = self.decrypt_auth(data);
+
+        if self.auth_accumulator.state.to_le_bytes().as_slice() != tag {
+            return Err(Error);
+        }
+
+        Ok(output)
     }
 
     pub fn encrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>,) -> [u8; 8] {
@@ -308,6 +368,62 @@ impl GrainCore {
         }
         
         self.auth_accumulator.state.to_le_bytes()
+    }
+
+    pub fn decrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>, tag: &[u8]) -> Result<(), Error> {
+        let mut tag: [u8; 8] = [0u8; 8];
+
+        // Init the output with the associated data encoded length
+        let mut encoded_len = {
+            if authenticated_data.len() == 0 {
+                vec![0]
+            } else {
+                utils::len_encode(authenticated_data.len())
+
+            }
+        };
+
+        // Auth data
+        for b in encoded_len {
+            let keystream = self.clock_u16();
+            let auth_stream = {
+                let mut byte = 0u8;
+                for i in 0..8 {
+                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+                }
+                byte
+            };
+
+            self.auth_byte(&auth_stream, &b);
+        }
+
+        // Auth data
+        for b in authenticated_data {
+            let keystream = self.clock_u16();
+            let auth_stream = {
+                let mut byte = 0u8;
+                for i in 0..8 {
+                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
+                }
+                byte
+            };
+
+            self.auth_byte(&auth_stream, &b);
+        }
+
+        
+        for i in 0..data.len() {
+            let mut byte = data.get(i);
+
+            let mut out = byte.get_out();
+            out = &mut self.decrypt_and_auth_byte(byte.get_in());
+        }
+        
+        if tag == self.auth_accumulator.state.to_le_bytes().as_slice() {
+            return Err(Error);
+        } else {
+            return Ok(());
+        }
     }
 }
 

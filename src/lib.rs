@@ -113,10 +113,8 @@ impl AeadInOut for Grain128 {
 
         cipher.init_with_iv(nonce_int);
 
-        let tag = cipher.encrypt_auth_aead_inout(associated_data, buffer);
+        cipher.decrypt_auth_aead_inout(associated_data, buffer, tag.as_slice())
 
-        
-        Ok(())
     }
 }
 
