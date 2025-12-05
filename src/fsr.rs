@@ -10,6 +10,7 @@ use crate::traits::{
 
 
 /// Core structure of the 128bits grain LFSR
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 pub struct GrainLfsr {
     pub(crate) state: u128,
 }
@@ -54,6 +55,7 @@ impl Xfsr<u16> for GrainLfsr {
 
 
 /// Core structure for the Grain128-AEADv2 NFSR
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 pub struct GrainNfsr {
     pub(crate) state: u128,
 }
@@ -125,6 +127,7 @@ impl Xfsr<u16> for GrainNfsr {
 }
 
 
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 pub struct GrainAuthAccumulator {
     pub(crate) state: u64,
 }
@@ -145,6 +148,7 @@ impl Accumulator<u8> for GrainAuthAccumulator {
 }
 
 
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 pub struct GrainAuthRegister {
     pub(crate) state: u64,
 }

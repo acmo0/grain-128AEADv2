@@ -14,18 +14,14 @@ extern crate alloc;
 
 pub use cipher;
 
-use cipher::{
-    BlockSizeUser, IvSizeUser,
-    consts::{U1, U8, U12, U16}
-};
 
 
-pub use aead::{self, Tag, AeadCore, AeadInOut, Error, Key, KeyInit, KeySizeUser, Nonce, array::Array, inout::InOutBuf};
+pub use aead::{self, Tag, AeadCore, AeadInOut, Error, Key, KeyInit, KeySizeUser, Nonce, array::Array, arrayvec::ArrayVec, inout::InOutBuf, consts::{U1, U8, U12, U16}, Buffer};
 use aead::TagPosition;
 
 
 #[cfg(feature = "zeroize")]
-use cipher::zeroize::{Zeroize, ZeroizeOnDrop};
+pub use zeroize;
 
 
 mod grain_core;
@@ -35,7 +31,8 @@ mod traits;
 
 use grain_core::GrainCore;
 
-struct Grain128 {
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
+pub struct Grain128 {
     pub(crate) key: u128,
 }
 
@@ -45,14 +42,14 @@ impl KeySizeUser for Grain128{
     type KeySize = U16;
 }
 
-impl IvSizeUser for Grain128 {
+/*impl IvSizeUser for Grain128 {
     type IvSize = U12;
 }
 
 impl BlockSizeUser for Grain128 {
     type BlockSize = U1;
 }
-
+*/
 impl KeyInit for Grain128 {
     fn new(key: &Key<Self>) -> Self {
 
@@ -66,7 +63,7 @@ impl KeyInit for Grain128 {
 }
 
 impl AeadCore for Grain128 {
-    type NonceSize = U8;
+    type NonceSize = U12;
     type TagSize = U8;
     const TAG_POSITION: TagPosition = TagPosition::Postfix;
 }
@@ -81,18 +78,16 @@ impl AeadInOut for Grain128 {
         buffer: InOutBuf<'_, '_, u8>,
     ) -> Result<Tag<Self>, Error> {
 
-        let mut cipher = GrainCore::new_with_key(self.key);
-
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);
         }
 
-        cipher.init_with_iv(nonce_int);
+        let mut cipher = GrainCore::new(self.key, nonce_int);
 
-        let tag = cipher.encrypt_auth_aead_inout(associated_data, buffer);
+        let tag = Tag::<Self>::from(cipher.encrypt_auth_aead_inout(associated_data, buffer));
 
-        Ok(Array::from(tag))
+        return Ok(tag);
     }
 
     fn decrypt_inout_detached(
@@ -103,51 +98,14 @@ impl AeadInOut for Grain128 {
         tag: &Tag<Self>,
     ) -> Result<(), Error> {
 
-        let mut cipher = GrainCore::new_with_key(self.key);
-
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);
         }
 
-        cipher.init_with_iv(nonce_int);
-
+        let mut cipher = GrainCore::new(self.key, nonce_int);
+        
         cipher.decrypt_auth_aead_inout(associated_data, buffer, tag.as_slice())
 
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::fsr::{
-        GrainLfsr,
-        GrainNfsr,
-        GrainAuthRegister,
-        GrainAuthAccumulator,
-    };
-
-    use super::traits::{
-        Xfsr,
-        Accumulator,
-    };
-
-/*    #[test]
-    fn it_works() {
-        let mut glfsr = GrainLfsr::new(123612162141);
-
-        for _i in 0..1 {
-            <GrainLfsr as Xfsr<u8>>::clock(&mut glfsr);
-        }
-    }*/
-    
-
-/*    #[test]
-    fn test_acc() {
-        let mut acc = GrainAuthRegister::new();
-        let mut glfsr = GrainLfsr::new(123612162141);
-
-        for _k in 0..100000000 {
-            acc.accumulate(&<GrainLfsr as Xfsr<u8>>::clock(&mut glfsr));
-        }
-    }*/
 }

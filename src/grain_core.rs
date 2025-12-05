@@ -29,71 +29,62 @@ pub(crate) struct GrainCore {
     nfsr: GrainNfsr,
     auth_accumulator: GrainAuthAccumulator,
     auth_register: GrainAuthRegister,
-    key: u128,
 }
-
 
 impl GrainCore {
 
-    pub fn new_with_key(key: u128) -> Self {
-        GrainCore {
-            lfsr: GrainLfsr::new(0u128),
-            nfsr: GrainNfsr::new(key),
-            auth_accumulator: GrainAuthAccumulator::new(),
-            auth_register: GrainAuthRegister::new(),
-            key: key,
-        }
-    }
-
-    pub fn init_with_iv(&mut self, iv: u128) {
+    pub fn new(key: u128, iv: u128) -> Self {
 
         if iv >= (1u128 << 96) {
             panic!("Unable to init Grain-128AEADv2, IV is too big (must be 12 bytes)");
         }
 
-        let mut clocked = 0;
+        let mut cipher = GrainCore {
+            lfsr: GrainLfsr::new((0x7fffffff << 96) | iv),
+            nfsr: GrainNfsr::new(key),
+            auth_accumulator: GrainAuthAccumulator::new(),
+            auth_register: GrainAuthRegister::new(),
+        };
 
-        self.lfsr.state = (0x7fffffff << 96) | iv;
+
 
 
         // Clock 320 times and re-input the feedback to both LFSR and NFSR
         for _i in 0..20 {
-            clocked += 16;
-            let fb: u128 = self.clock_u16() as u128;
-            self.lfsr.state ^= fb << 112;
-            self.nfsr.state ^= fb << 112;
+            let fb: u128 = cipher.clock_u16() as u128;
+            cipher.lfsr.state ^= fb << 112;
+            cipher.nfsr.state ^= fb << 112;
         }
         
         // Clock 64 times and re-input the feedback to both LFSR and NFSR
         // + re-introduce key
         for i in 0..4 {
-            clocked += 16;
-            let fb: u128 = self.clock_u16() as u128;
-            self.lfsr.state ^= (fb ^ (self.key >> (i * 16 + 64)) & 0xffff as u128) << 112;
-            self.nfsr.state ^= (fb ^ (self.key >> (i * 16)) & 0xffff as u128) << 112;
+            let fb: u128 = cipher.clock_u16() as u128;
+            cipher.lfsr.state ^= (fb ^ (key >> (i * 16 + 64)) & 0xffff as u128) << 112;
+            cipher.nfsr.state ^= (fb ^ (key >> (i * 16)) & 0xffff as u128) << 112;
             
         }
         
         // Init the accumulator/register
         let mut acc_state: u64 = 0;
         for i in 0..4 {
-            clocked += 16;
-            let fb: u64 = self.clock_u16() as u64;
+            let fb: u64 = cipher.clock_u16() as u64;
             
             acc_state |= fb << i * 16
         }
-        self.auth_accumulator.state = acc_state;
+        cipher.auth_accumulator.state = acc_state;
 
         
 
         let mut reg_state: u64 = 0;
         for i in 0..4 {
-            clocked += 16;
-            let fb: u64 = self.clock_u16() as u64;
+            let fb: u64 = cipher.clock_u16() as u64;
             
             reg_state |= fb << i * 16
         }
-        self.auth_register.state = reg_state;
+        cipher.auth_register.state = reg_state;
+
+        cipher
     }
 
     pub fn clock_u16(&mut self) -> u16 {
@@ -359,17 +350,17 @@ impl GrainCore {
 
         
         for i in 0..data.len() {
-            let mut byte = data.get(i);
-
-            let mut out = byte.get_out();
-            out = &mut self.encrypt_and_auth_byte(byte.get_in());
+            let encrypted_byte = self.encrypt_and_auth_byte(&data.get_in()[i]);
+            data.get_out()[i..(i+1)].copy_from_slice(&[encrypted_byte]);
         }
+
+        // Add padding + encrypt/auth
+        self.encrypt_and_auth_byte(&1u8);
         
         self.auth_accumulator.state.to_le_bytes()
     }
 
     pub fn decrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>, tag: &[u8]) -> Result<(), Error> {
-        let tag: [u8; 8] = [0u8; 8];
 
         // Init the output with the associated data encoded length
         let encoded_len = {
@@ -411,13 +402,15 @@ impl GrainCore {
 
         
         for i in 0..data.len() {
-            let mut byte = data.get(i);
+            let decrypted_byte = self.decrypt_and_auth_byte(&data.get_in()[i]);
 
-            let mut out = byte.get_out();
-            out = &mut self.decrypt_and_auth_byte(byte.get_in());
+            data.get_out()[i..(i+1)].copy_from_slice(&[decrypted_byte]);
         }
+        // Add padding + encrypt/auth
+        self.encrypt_and_auth_byte(&1u8);
         
-        if tag == self.auth_accumulator.state.to_le_bytes().as_slice() {
+        
+        if tag != self.auth_accumulator.state.to_le_bytes().as_slice() {
             return Err(Error);
         } else {
             return Ok(());
@@ -432,26 +425,6 @@ mod tests {
 
     use proptest::prelude::*;
     
-    /*extern crate std;
-    use std::mem;
-*/
-    // Reverse test vectors that are assumed to be on `size` bytes
-    fn from_test_vector(test_vec: u128, size: usize) -> u128{
-        let mut output = 0u128;
-
-        for i in 0..size {
-            let byte = (test_vec >> i * 8) & 0xff;
-            let mut reversed_byte = 0;
-
-            for j in 0..8 {
-                reversed_byte += ((byte >> j) & 1) << (7 - j);
-            }
-            output += reversed_byte << (i * 8);
-        }
-
-        output
-    }
-
     fn to_test_vector(test_vec: u128, size: usize) -> u128{
         let mut output = 0u128;
 
@@ -475,8 +448,7 @@ mod tests {
         let tag = 0x7137d5998c2de4a5u128;
 
         // Init and load keys into the cipher
-        let mut cipher = GrainCore::new_with_key(0);
-        cipher.init_with_iv(0);
+        let mut cipher = GrainCore::new(0, 0);
         
         assert_eq!(nfsr_state, to_test_vector(cipher.nfsr.state, 16));
         assert_eq!(lfsr_state, to_test_vector(cipher.lfsr.state, 16));
@@ -486,10 +458,6 @@ mod tests {
         cipher.encrypt_auth_aead(&[], &[]);
         assert_eq!(tag, to_test_vector(cipher.auth_accumulator.state.into(), 8));
 
-        std::println!("NFSR : 0x{:032x}", to_test_vector(cipher.nfsr.state, 16));
-        std::println!("LFSR : 0x{:032x} 0x{:032x} 0x{:032x}", cipher.lfsr.state, from_test_vector(cipher.lfsr.state, 16), to_test_vector(cipher.lfsr.state, 16));
-        std::println!("ACC : 0x{:016x}", to_test_vector(cipher.auth_accumulator.state.into(), 8));
-        std::println!("REG : 0x{:016x}", to_test_vector(cipher.auth_register.state.into(), 8));
     }
 
     #[test]
@@ -508,8 +476,10 @@ mod tests {
         let pt = (0x0001020304050607u64).to_be_bytes();
 
         // Init and load keys into the cipher
-        let mut cipher = GrainCore::new_with_key(to_test_vector(0x000102030405060708090a0b0c0d0e0fu128, 16));
-        cipher.init_with_iv(to_test_vector(0x000102030405060708090a0bu128, 12));
+        let mut cipher = GrainCore::new(
+            to_test_vector(0x000102030405060708090a0b0c0d0e0fu128, 16),
+            to_test_vector(0x000102030405060708090a0bu128, 12)
+        );
         
         assert_eq!(nfsr_state, to_test_vector(cipher.nfsr.state, 16));
         assert_eq!(lfsr_state, to_test_vector(cipher.lfsr.state, 16));

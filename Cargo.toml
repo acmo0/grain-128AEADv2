@@ -6,24 +6,22 @@ edition = "2024"
 [dependencies]
 aead = { version = "0.6.0-rc.3", default-features = false }
 cipher = { version = "0.5.0-rc.2", features = ["stream-wrapper"] }
+zeroize = { version = "1.8", optional = true, default-features = false, features = ["derive"] }
 num = "0.4"
 
 [dependicies.num]
 version = "0.4"
 default-features = false
 
-
-[dev-dependencies]
-#cipher = { version = "0.5.0-rc.1", features = ["dev"] }
-hex-literal = "1"
-proptest = "1.9.0"
-rand = "0.9.2"
-
-
 [features]
-zeroize = ["cipher/zeroize"]
+zeroize = ["dep:zeroize"]
+alloc = ["aead/alloc"]
+arrayvec = ["aead/arrayvec"]
 
 [profile.release]
 debug = true
 codegen-unti = 1
 lto = "thin"
+
+[dev-dependencies]
+proptest = "1.9.0"
