@@ -6,13 +6,10 @@ use num::{PrimInt};
 /// This trait provide a method to apply a feedback function
 /// to the xFSR state and a clock method to clock once the xFSR
 pub trait Xfsr<T: PrimInt> {
-    #[inline(always)]
     fn get_state(&self) -> u128;
 
-    #[inline(always)]
     fn set_state(&mut self, new_value: u128);
     
-    #[inline(always)]
     fn feedback_function(&self) -> u128;
     
     fn clock(&mut self) -> T {
@@ -56,11 +53,10 @@ mod tests {
     }
 
     impl Xfsr<u8> for Lfsr {
-        #[inline(always)]
         fn get_state(&self) -> u128 {
             self.state
         }
-        #[inline(always)]
+
         fn set_state(&mut self, new_value: u128) {
             self.state = new_value
         }
@@ -74,14 +70,14 @@ mod tests {
     }
 
     impl Xfsr<u8> for Nfsr {
-        #[inline(always)]
         fn get_state(&self) -> u128 {
             self.state
         }
-        #[inline(always)]
+
         fn set_state(&mut self, new_value: u128) {
             self.state = new_value
         }
+
         #[inline(always)]
         fn feedback_function(&self) -> u128 {
             ((

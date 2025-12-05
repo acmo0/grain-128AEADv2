@@ -33,20 +33,21 @@ pub(crate) struct GrainCore {
 
 impl GrainCore {
 
-    pub fn new(key: u128, iv: u128) -> Self {
-
+    /// Init a new instance of Grain-128AEADv2 as specified 
+    /// in the NIST spec in Section 2.2.
+    pub(crate) fn new(key: u128, iv: u128) -> Self {
+        // Ensure that the size of the IV doesn't exceed 12 bytes.
         if iv >= (1u128 << 96) {
             panic!("Unable to init Grain-128AEADv2, IV is too big (must be 12 bytes)");
         }
 
+        // Init/load the keys into grain cipher
         let mut cipher = GrainCore {
             lfsr: GrainLfsr::new((0x7fffffff << 96) | iv),
             nfsr: GrainNfsr::new(key),
             auth_accumulator: GrainAuthAccumulator::new(),
             auth_register: GrainAuthRegister::new(),
         };
-
-
 
 
         // Clock 320 times and re-input the feedback to both LFSR and NFSR
@@ -59,23 +60,20 @@ impl GrainCore {
         // Clock 64 times and re-input the feedback to both LFSR and NFSR
         // + re-introduce key
         for i in 0..4 {
-            let fb: u128 = cipher.clock_u16() as u128;
-            cipher.lfsr.state ^= (fb ^ (key >> (i * 16 + 64)) & 0xffff as u128) << 112;
-            cipher.nfsr.state ^= (fb ^ (key >> (i * 16)) & 0xffff as u128) << 112;
-            
+            let fb = cipher.clock_u16();
+            cipher.lfsr.state ^= ((fb ^ get_2bytes_at_bit(&key, i * 16 + 64)) as u128) << 112;
+            cipher.nfsr.state ^= ((fb ^ get_2bytes_at_bit(&key, i * 16)) as u128) << 112;
         }
         
-        // Init the accumulator/register
+        // Init the accumulator
         let mut acc_state: u64 = 0;
         for i in 0..4 {
             let fb: u64 = cipher.clock_u16() as u64;
-            
             acc_state |= fb << i * 16
         }
         cipher.auth_accumulator.state = acc_state;
 
-        
-
+        // Init the register
         let mut reg_state: u64 = 0;
         for i in 0..4 {
             let fb: u64 = cipher.clock_u16() as u64;
@@ -87,7 +85,12 @@ impl GrainCore {
         cipher
     }
 
-    pub fn clock_u16(&mut self) -> u16 {
+    /// Clock 16 times at once the cipher to optimize software
+    /// implementation because we're working at byte-level. This
+    /// returns the pre-output according to NIST spec. in Section 2.1
+    fn clock_u16(&mut self) -> u16 {
+        // Get the 9 bytes from LFSR/NFSR and compute the
+        // "pre-output" as defined in grain-128AEADv2 spec
         let x0 = get_2bytes_at_bit(&self.nfsr.state, 12);
         let x1 = get_2bytes_at_bit(&self.lfsr.state, 8);
         let x2 = get_2bytes_at_bit(&self.lfsr.state, 13);
@@ -109,19 +112,24 @@ impl GrainCore {
             get_2bytes_at_bit(&self.nfsr.state, 73) ^
             get_2bytes_at_bit(&self.nfsr.state, 89);
 
+        // Clock/update the xFSRs
         let lfsr_output: u16 = self.lfsr.clock();
-        let nfsr_output: u16 = self.nfsr.clock();
-
+        self.nfsr.clock();
         self.nfsr.xor_last_2bytes(lfsr_output);
 
         output
     }
 
+    /// Update grain-128AEADv2 accumulator according to
+    /// NIST spec. in Section 2.3
     fn update_auth_accumulator(&mut self) {
         self.auth_accumulator.state ^= self.auth_register.state;
     }
 
-    fn encrypt_and_auth_byte(&mut self, data: &u8) -> u8 {
+    /// Clock 16 times the cipher and extract the streams for
+    /// authentication and encryption/decryption according to
+    /// NIST spec. in Section 2.3.
+    fn get_stream(&mut self) -> (u8, u8){
         let keystream = self.clock_u16();
 
         // Extract keystream (at even indexes)
@@ -133,6 +141,7 @@ impl GrainCore {
             byte
         };
 
+        // Extract the auth stream (at odd indexes)
         let auth_stream = {
             let mut byte = 0u8;
             for i in 0..8 {
@@ -141,31 +150,26 @@ impl GrainCore {
             byte
         };
 
+        (encrypt_stream, auth_stream)
+    }
+
+    /// Perform the encryption and authentication of a single
+    /// byte of data according to NIST spec. in Section 2.3.
+    fn encrypt_and_auth_byte(&mut self, data: &u8) -> u8 {
+        let (encrypt_stream, auth_stream) = self.get_stream();
+
+        // Auth the plaintext byte
         self.auth_byte(&auth_stream, &data);
 
+        // Encrypt the plaintext
         data ^ encrypt_stream
         
     }
 
+    /// Perform the decryption and authentication of a single
+    /// byte of data according to NIST spec. in Section 2.3.
     fn decrypt_and_auth_byte(&mut self, data: &u8) -> u8 {
-        let keystream = self.clock_u16();
-
-        // Extract keystream (at even indexes)
-        let encrypt_stream = {
-            let mut byte = 0u8;
-            for i in 0..8 {
-                byte |= (((keystream >> (i << 1)) & 1) << i) as u8; 
-            }
-            byte
-        };
-
-        let auth_stream = {
-            let mut byte = 0u8;
-            for i in 0..8 {
-                byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-            }
-            byte
-        };
+        let (encrypt_stream, auth_stream) = self.get_stream();
 
         let output = data ^ encrypt_stream;
 
@@ -175,7 +179,8 @@ impl GrainCore {
         
     }
 
-
+    /// Authenticate a single byte of plaintext according to
+    /// NIST spec. in Section 2.3.
     fn auth_byte(&mut self, auth_stream: &u8, data: &u8) {
         // Update the auth register
         for i in 0..8 {
@@ -187,7 +192,9 @@ impl GrainCore {
         }
     }
 
-    pub fn encrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
+    /// Performs the padding and then the encryption/authentication
+    /// of a given plaintext according the the NIST spec. in Section 2.6.1 
+    fn encrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
         let mut output: Vec<u8> = Vec::with_capacity(data.len() + 1);
 
         for b in data {
@@ -200,7 +207,9 @@ impl GrainCore {
         output
     }
 
-    pub fn decrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
+    /// Performs the decryption/authentication of a given
+    /// plaintext according the the NIST spec. in Section 2.6.2
+    fn decrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
         let mut output: Vec<u8> = Vec::with_capacity(data.len() + 1);
 
         for b in data {
@@ -213,7 +222,10 @@ impl GrainCore {
         output
     }
 
-    pub fn encrypt_auth_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
+    /// Encrypts and authenticate a given plaintext, and (potential) additionnal
+    /// authenticated data according to the NIST spec. in Section 2.6.1. It returns
+    /// the ciphertext and the authentication tag.
+    pub fn encrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
         // Init the output with the associated data encoded length
         let encoded_len = {
             if authenticated_data.len() == 0 {
@@ -258,6 +270,10 @@ impl GrainCore {
         (output, self.auth_accumulator.state.to_le_bytes())
     }
 
+
+    /// Decrypts and authenticate a given ciphertext, and (potential) additionnal
+    /// authenticated data according to the NIST spec. in Section 2.6.1.
+    /// It returns the plaintext if the given tag is correct, otherwise it fails.
     pub fn decrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8], tag: &[u8]) -> Result<Vec<u8>, Error> {
         // Init the output with the associated data encoded length
         let encoded_len = {
@@ -268,7 +284,6 @@ impl GrainCore {
 
             }
         };
-        let output: Vec<u8> = Vec::with_capacity(authenticated_data.len() + data.len() + 9);
 
         // Auth data
         for b in encoded_len {
@@ -307,9 +322,12 @@ impl GrainCore {
         Ok(output)
     }
 
-    pub fn encrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>,) -> [u8; 8] {
-        let tag: [u8; 8] = [0u8; 8];
-
+    /// Encrypts and authenticate a given plaintext, and (potential) additionnal
+    /// authenticated data according to the NIST spec. in Section 2.6.1. The
+    /// encryption is done in-place to match the RustCrypto traits requirements.
+    /// It returns only the tag since the encrypted data is stored in the data
+    /// buffer.
+    pub(crate) fn encrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>,) -> [u8; 8] {
         // Init the output with the associated data encoded length
         let encoded_len = {
             if authenticated_data.len() == 0 {
@@ -360,7 +378,11 @@ impl GrainCore {
         self.auth_accumulator.state.to_le_bytes()
     }
 
-    pub fn decrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>, tag: &[u8]) -> Result<(), Error> {
+    /// Decrypts and authenticate a given ciphertext, and (potential) additionnal
+    /// authenticated data according to the NIST spec. in Section 2.6.1. The
+    /// decryption is done in-place to match the RustCrypto traits requirements.
+    /// It fails if the given tag doesn't match the computed tag.
+    pub(crate) fn decrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>, tag: &[u8]) -> Result<(), Error> {
 
         // Init the output with the associated data encoded length
         let encoded_len = {
@@ -422,21 +444,9 @@ impl GrainCore {
 #[cfg(test)]
 mod tests { 
     use super::*;
-
+    use crate::test_utils::to_test_vector;
     use proptest::prelude::*;
     
-    fn to_test_vector(test_vec: u128, size: usize) -> u128{
-        let mut output = 0u128;
-
-        for i in 0..size {
-            let byte = (test_vec >> i * 8) & 0xff;
-            
-            output += byte << ((size -1)* 8 - (i * 8));
-        }
-
-        output
-    }
-
     #[test]
     fn test_load_null() {
 
@@ -455,7 +465,7 @@ mod tests {
         assert_eq!(acc_state, to_test_vector(cipher.auth_accumulator.state.into(), 8));
         assert_eq!(reg_state, to_test_vector(cipher.auth_register.state.into(), 8));
         
-        cipher.encrypt_auth_aead(&[], &[]);
+        cipher.encrypt_aead(&[], &[]);
         assert_eq!(tag, to_test_vector(cipher.auth_accumulator.state.into(), 8));
 
     }
@@ -487,7 +497,7 @@ mod tests {
         assert_eq!(reg_state, to_test_vector(cipher.auth_register.state.into(), 8));
 
 
-        let (encrypted, tag) = cipher.encrypt_auth_aead(&ad, &pt);
+        let (encrypted, tag) = cipher.encrypt_aead(&ad, &pt);
 
 
         let ct: [u8; 8] = encrypted.try_into().unwrap();

@@ -26,7 +26,6 @@ impl GrainLfsr {
 }
 
 
-
 /// Clock sixteen bits at once to speed up 
 /// keystream & authentication stream generation.
 impl Xfsr<u16> for GrainLfsr {
@@ -66,10 +65,6 @@ impl GrainNfsr {
         GrainNfsr {
             state: initial_state,
         }
-    }
-
-    pub fn xor_last_byte(&mut self, byte: u8) -> () {
-        self.state ^= (byte as u128) << 120;
     }
 
     pub fn xor_last_2bytes(&mut self, bytes: u16) -> () {

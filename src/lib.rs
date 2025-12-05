@@ -16,7 +16,7 @@ pub use cipher;
 
 
 
-pub use aead::{self, Tag, AeadCore, AeadInOut, Error, Key, KeyInit, KeySizeUser, Nonce, array::Array, arrayvec::ArrayVec, inout::InOutBuf, consts::{U1, U8, U12, U16}, Buffer};
+pub use aead::{self, Tag, AeadCore, AeadInOut, Error, Key, KeyInit, KeySizeUser, Nonce, array::Array, inout::InOutBuf, consts::{U1, U8, U12, U16}, Buffer};
 use aead::TagPosition;
 
 
@@ -28,6 +28,7 @@ mod grain_core;
 mod fsr;
 mod utils;
 mod traits;
+mod test_utils;
 
 use grain_core::GrainCore;
 
@@ -42,14 +43,6 @@ impl KeySizeUser for Grain128{
     type KeySize = U16;
 }
 
-/*impl IvSizeUser for Grain128 {
-    type IvSize = U12;
-}
-
-impl BlockSizeUser for Grain128 {
-    type BlockSize = U1;
-}
-*/
 impl KeyInit for Grain128 {
     fn new(key: &Key<Self>) -> Self {
 
@@ -69,8 +62,36 @@ impl AeadCore for Grain128 {
 }
 
 
+impl Grain128 {
+    #[inline(always)]
+    fn encrypt_aead(&self, nonce: &Nonce<Self>, plaintext: &[u8], associated_data: &[u8]) -> (Vec<u8>, Tag<Self>){
+        let mut nonce_int: u128 = 0;
+        for i in 0..nonce.len() {
+            nonce_int |= (nonce[i] as u128) << (i * 8);
+        }
+
+        let mut cipher = GrainCore::new(self.key, nonce_int);
+
+        let (ct, tag) = cipher.encrypt_aead(associated_data, plaintext);
+
+        (ct, Tag::<Self>::from(tag))
+    }
+
+    #[inline(always)]
+    fn decrypt_aead(&self, nonce: &Nonce<Self>, ciphertext: &[u8], associated_data: &[u8], expected_tag: &Tag<Self>) -> Result<Vec<u8>, Error> {
+        let mut nonce_int: u128 = 0;
+        for i in 0..nonce.len() {
+            nonce_int |= (nonce[i] as u128) << (i * 8);
+        }
+
+        let mut cipher = GrainCore::new(self.key, nonce_int);
+
+        cipher.decrypt_aead(associated_data, ciphertext, expected_tag.as_slice())
+    }
+}
 
 impl AeadInOut for Grain128 {
+    #[inline(always)]
     fn encrypt_inout_detached(
         &self,
         nonce: &Nonce<Self>,
@@ -90,6 +111,7 @@ impl AeadInOut for Grain128 {
         return Ok(tag);
     }
 
+    #[inline(always)]
     fn decrypt_inout_detached(
         &self,
         nonce: &Nonce<Self>,
@@ -104,7 +126,7 @@ impl AeadInOut for Grain128 {
         }
 
         let mut cipher = GrainCore::new(self.key, nonce_int);
-        
+
         cipher.decrypt_auth_aead_inout(associated_data, buffer, tag.as_slice())
 
     }
