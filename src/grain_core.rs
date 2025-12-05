@@ -447,9 +447,14 @@ mod tests {
     use crate::test_utils::to_test_vector;
     use proptest::prelude::*;
     
+
+    /// Performs an initialization and an encryption
+    /// of an all-zero key/nonce with an empty plaintext.
+    /// It checks the LFSR/NFSR/Accumulator/Register states
+    /// and the computed tag according the the tests
+    /// vectors given in the NIST spec. in Section 7. 
     #[test]
     fn test_load_null() {
-
         // Test vectors from Grain-128AEADv2 spec
         let lfsr_state = 0x8f395a9421b0963364e2ed30679c8ee1u128;
         let nfsr_state = 0x81f7e0c655d035823310c278438dbc20u128;
@@ -470,9 +475,14 @@ mod tests {
 
     }
 
+
+    /// Performs an initialization and an encryption
+    /// of given key/nonce/plaintext/auth data set
+    /// It checks the LFSR/NFSR/Accumulator/Register states
+    /// and the computed ciphertext/tag according the the tests
+    /// vectors given in the NIST spec. in Section 7. 
     #[test]
     fn test_load_non_null() {
-
         // Test vectors from Grain-128AEADv2 spec
         let nfsr_state = 0xb3c2e1b1eec1f08c2d6eae957f6af9d0u128;
         let lfsr_state = 0x0e1f950d45e05087c4cd63fd00eab310u128;
