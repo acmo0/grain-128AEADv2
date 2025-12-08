@@ -128,18 +128,10 @@ pub struct GrainAuthAccumulator {
 }
 
 
-impl Accumulator<u8> for GrainAuthAccumulator {
-    fn accumulate(&mut self, new: &u8) -> u8 {
-        let output = get_ith_bit(&self.state, 63);
-        self.state <<= 1;
-        self.state |= *new as u64;
-
-        output
-    }
-
-   fn new() -> GrainAuthAccumulator { 
+impl GrainAuthAccumulator {
+    pub(crate) fn new() -> GrainAuthAccumulator { 
        GrainAuthAccumulator { state: 0u64 } 
-   }
+    }
 }
 
 

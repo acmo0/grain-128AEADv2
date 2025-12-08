@@ -210,14 +210,14 @@ impl GrainCore {
     /// Performs the decryption/authentication of a given
     /// plaintext according the the NIST spec. in Section 2.6.2
     fn decrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
-        let mut output: Vec<u8> = Vec::with_capacity(data.len() + 1);
+        let mut output: Vec<u8> = Vec::with_capacity(data.len());
 
         for b in data {
-            output.push(self.encrypt_and_auth_byte(&b));
+            output.push(self.decrypt_and_auth_byte(&b));
         }
 
         // Add padding + encrypt/auth
-        self.decrypt_and_auth_byte(&1u8);
+        self.encrypt_and_auth_byte(&1u8);
 
         output
     }
@@ -225,7 +225,7 @@ impl GrainCore {
     /// Encrypts and authenticate a given plaintext, and (potential) additionnal
     /// authenticated data according to the NIST spec. in Section 2.6.1. It returns
     /// the ciphertext and the authentication tag.
-    pub fn encrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
+    pub(crate) fn encrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
         // Init the output with the associated data encoded length
         let encoded_len = {
             if authenticated_data.len() == 0 {
@@ -235,37 +235,19 @@ impl GrainCore {
 
             }
         };
-        let mut output: Vec<u8> = Vec::with_capacity(authenticated_data.len() + data.len() + 9);
-
         // Auth data
         for b in encoded_len {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
         // Auth data
         for b in authenticated_data {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
-        output.extend(self.encrypt_auth(data));
+        let output = self.encrypt_auth(data);
 
         (output, self.auth_accumulator.state.to_le_bytes())
     }
@@ -274,42 +256,25 @@ impl GrainCore {
     /// Decrypts and authenticate a given ciphertext, and (potential) additionnal
     /// authenticated data according to the NIST spec. in Section 2.6.1.
     /// It returns the plaintext if the given tag is correct, otherwise it fails.
-    pub fn decrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8], tag: &[u8]) -> Result<Vec<u8>, Error> {
+    pub(crate) fn decrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8], tag: &[u8]) -> Result<Vec<u8>, Error> {
         // Init the output with the associated data encoded length
         let encoded_len = {
             if authenticated_data.len() == 0 {
                 vec![0]
             } else {
                 utils::len_encode(authenticated_data.len())
-
             }
         };
 
         // Auth data
         for b in encoded_len {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
         // Auth data
         for b in authenticated_data {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
@@ -340,29 +305,13 @@ impl GrainCore {
 
         // Auth data
         for b in encoded_len {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
         // Auth data
         for b in authenticated_data {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
@@ -396,29 +345,13 @@ impl GrainCore {
 
         // Auth data
         for b in encoded_len {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
         // Auth data
         for b in authenticated_data {
-            let keystream = self.clock_u16();
-            let auth_stream = {
-                let mut byte = 0u8;
-                for i in 0..8 {
-                    byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-                }
-                byte
-            };
-
+            let (encrypt_stream, auth_stream) = self.get_stream();
             self.auth_byte(&auth_stream, &b);
         }
 
@@ -517,5 +450,98 @@ mod tests {
         
     }
 
+    /// Tries to init, encrypt and decrypt without any modification
+    /// of the ciphertext. It checks then that we indeed retrieve
+    /// the right decrypted plaintext.
+    #[test]
+    fn test_encrypt_decrypt() {
+        // Plaintext / authenticated data from test vectors
+        let ad = (0x0001020304050607u64).to_be_bytes();
+        let pt = (0x0001020304050607u64).to_be_bytes();
+
+        // Init and load keys into the cipher
+        let mut cipher = GrainCore::new(
+            0, 0
+        );
+        
+        let (encrypted, tag) = cipher.encrypt_aead(&[], &pt);
+
+        // Init and load keys into the cipher
+        cipher = GrainCore::new(
+            0, 0
+        );
+
+        let decrypted = cipher.decrypt_aead(&[], &encrypted, &tag).expect("Unable to decrypt");
+
+        assert_eq!(decrypted, pt);
+    }
+
+    /// Tries to init, encrypt and decrypt but while modifying
+    /// the ciphertext. This should fail because the tag is
+    /// no longer valid.
+    #[test]
+    #[should_panic(expected = "Unable to decrypt")]
+    fn test_encrypt_decrypt_wrong_ct() {
+        // Plaintext / authenticated data from test vectors
+        let ad = (0x0001020304050607u64).to_be_bytes();
+        let pt = (0x0001020304050607u64).to_be_bytes();
+
+        // Init and load keys into the cipher
+        let mut cipher = GrainCore::new(
+            0, 0
+        );
+        
+        let (mut encrypted, tag) = cipher.encrypt_aead(&ad, &pt);
+
+        // Init and load keys into the cipher
+        cipher = GrainCore::new(
+            0, 0
+        );
+
+        encrypted[0] = 0;
+
+        let decrypted = cipher.decrypt_aead(&ad, &encrypted, &tag).expect("Unable to decrypt");
+
+        assert_eq!(decrypted, pt);
+    }
+
+    /// Tries to init, encrypt and decrypt but while modifying
+    /// the tag. It should fail because the tag is not valid
+    /// anymore.
+    #[test]
+    #[should_panic(expected = "Unable to decrypt")]
+    fn test_encrypt_decrypt_wrong_ad() {
+        // Plaintext / authenticated data from test vectors
+        let ad = (0x0001020304050607u64).to_be_bytes();
+        let ad2 = (0x0101020304050607u64).to_be_bytes();
+        let pt = (0x0001020304050607u64).to_be_bytes();
+
+        // Init and load keys into the cipher
+        let mut cipher = GrainCore::new(
+            0, 0
+        );
+        
+        let (encrypted, tag) = cipher.encrypt_aead(&ad, &pt);
+
+        // Init and load keys into the cipher
+        cipher = GrainCore::new(
+            0, 0
+        );
+
+        let decrypted = cipher.decrypt_aead(&ad2, &encrypted, &tag).expect("Unable to decrypt");
+
+        assert_eq!(decrypted, pt);
+    }
+
+
+    /// Tries to init a new Grain128-AEADv2 cipher with an
+    /// nonce that is too big acc. to the specs
+    proptest! {
+        #[test]
+        #[should_panic]
+        fn test_init_too_big(iv in (1 << 96)..(u128::MAX)) {
+            GrainCore::new(0, iv);
+        }
+    }
 }
 

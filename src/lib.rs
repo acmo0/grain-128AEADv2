@@ -55,6 +55,7 @@ impl KeyInit for Grain128 {
     }
 }
 
+
 impl AeadCore for Grain128 {
     type NonceSize = U12;
     type TagSize = U8;
@@ -63,8 +64,7 @@ impl AeadCore for Grain128 {
 
 
 impl Grain128 {
-    #[inline(always)]
-    fn encrypt_aead(&self, nonce: &Nonce<Self>, plaintext: &[u8], associated_data: &[u8]) -> (Vec<u8>, Tag<Self>){
+    pub fn encrypt_aead(&self, nonce: &Nonce<Self>, associated_data: &[u8], plaintext: &[u8]) -> (Vec<u8>, Tag<Self>){
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);
@@ -77,8 +77,7 @@ impl Grain128 {
         (ct, Tag::<Self>::from(tag))
     }
 
-    #[inline(always)]
-    fn decrypt_aead(&self, nonce: &Nonce<Self>, ciphertext: &[u8], associated_data: &[u8], expected_tag: &Tag<Self>) -> Result<Vec<u8>, Error> {
+    pub fn decrypt_aead(&self, nonce: &Nonce<Self>, associated_data: &[u8], ciphertext: &[u8], expected_tag: &Tag<Self>) -> Result<Vec<u8>, Error> {
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);

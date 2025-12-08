@@ -1,0 +1,19 @@
+use grain_128::Grain128;
+use grain_128::KeyInit;
+
+#[test]
+fn test_encrypt_decrypt_aead() {
+
+    // Init and load keys into the cipher
+    let key = [0u8; 16];
+    let nonce = [0u8; 12];
+
+    let pt = [0u8; 32];
+
+    let mut cipher = Grain128::new(&key.into());
+    
+    let (encrypted, tag) = cipher.encrypt_aead(&nonce.into(), b"this is authenticated data", &pt);
+
+    cipher = Grain128::new(&key.into());
+    let decrypted = cipher.decrypt_aead(&nonce.into(), b"this is authenticated data", &encrypted, &tag).expect("Unable to decrypt");
+}

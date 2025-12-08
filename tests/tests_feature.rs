@@ -1,4 +1,4 @@
-fn to_test_vector(test_vec: u128, size: usize) -> u128{
+pub fn to_test_vector(test_vec: u128, size: usize) -> u128{
     let mut output = 0u128;
 
     for i in 0..size {
@@ -9,6 +9,8 @@ fn to_test_vector(test_vec: u128, size: usize) -> u128{
 
     output
 }
+
+
 macro_rules! test_encrypt_for {
     ($name:tt, $type: ty) => {
         #[test]
@@ -25,8 +27,8 @@ macro_rules! test_encrypt_for {
 
             let mut cipher = Grain128::new(&key.into());
             
-            cipher.encrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to encrypt");
-            cipher.decrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to decrypt");
+            cipher.encrypt_in_place(&nonce.into(), b"this is authenticated data", &mut buffer).expect("Unable to encrypt");
+            cipher.decrypt_in_place(&nonce.into(), b"this is authenticated data", &mut buffer).expect("Unable to decrypt");
         }
     }
 }

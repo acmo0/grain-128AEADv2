@@ -48,15 +48,11 @@ pub fn len_encode(length: usize) -> Vec<u8> {
             size_len += 1
         }
 
+        let mut encoded = vec![0x80u8 + ((8 - size_len) as u8)];
+        encoded.extend_from_slice(&lenght_bytes[size_len..]);
 
-        let mut encoded = vec![0x80u8 + (size_len as u8)];
-        for i in size_len..lenght_bytes.len() {
-            encoded.push(lenght_bytes[i])
-        }
         encoded
     }
-
-    
 }
 
 
@@ -157,4 +153,35 @@ mod tests {
     test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u64, u64);
     test_get_2bytes_at_bit_for!(test_get_2bytes_at_bit_u128, u128);
 
+
+    proptest! {
+        #[test]
+        fn test_len_encode_le_127(l in 0..=127usize) {
+            assert_eq!(len_encode(l), vec![l as u8]);
+        }        
+    }
+
+    proptest! {
+        #[test]
+        fn test_len_encode_ge_127(l in 128..4294967296usize) {
+            let encoded = len_encode(l);
+            
+            // Ensure first bit is set to 1
+            assert_eq!((encoded[0] >> 7) & 1, 1);
+            
+            // Ensure the remaining first byte bits encode
+            // the byte length of the size
+            assert_eq!(encoded[0] & 0x7f, l.to_be_bytes().into_iter().skip_while(|&x| x == 0).count() as u8);
+
+            // Ensure the remaining bytes represents the len
+            let encoded_size: usize = {
+                let mut s = 0;
+                for i in 1..(encoded.len()) {
+                    s += (encoded[i] as usize) << (encoded.len() - i - 1) * 8
+                }
+                s
+            };
+            assert_eq!(encoded_size, l);
+        }
+    }
 }
