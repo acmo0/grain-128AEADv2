@@ -25,6 +25,60 @@ Pure Rust implementation of Grain-128AEADv2, a lightweight stream cipher.
 
 This crate requires **Rust 1.85** at a minimum.
 
+## Quickstart
+
+With randomly sampled keys and nonces (requires `getrandom` feature):
+
+```rust
+use grain_128aeadv2::{Grain128, aead::{Aead, AeadCore, KeyInit}};
+
+let key = Grain128::generate_key().expect("Unable to generate key");
+let cipher = Grain128::new(&key);
+
+// A nonce must be USED ONLY ONCE !
+let nonce = Grain128::generate_nonce().expect("Unable to generate nonce");
+let (ciphertext, tag) = cipher.encrypt_aead(
+    &nonce,
+    b"Some additionnal data",
+    b"this is a secret message"
+);
+
+let plaintext = cipher.decrypt_aead(
+    &nonce,
+    b"Some additionnal data",
+    &ciphertext,
+    &tag
+).expect("Tag verification failed");
+
+assert_eq!(&plaintext, b"this is a secret message"); 
+```
+
+In-place encryption (requires `alloc` feature) :
+
+```rust
+use grain_128aeadv2::{
+    Grain128, Key, Nonce,
+    aead::{AeadCore, AeadInOut, KeyInit, arrayvec::ArrayVec}
+};
+
+let key = Grain128::generate_key().expect("Unable to generate key");
+let cipher = Grain128::new(&key);
+
+// A nonce must be USED ONLY ONCE !
+let nonce = Grain128::generate_nonce().expect("Unable to generate nonce");
+// Take care : 8 bytes overhead to store the tag
+let mut buffer: Vec<u8> = vec![];
+buffer.extend_from_slice(b"a secret message");
+
+// Perform in place encryption inside 'buffer'
+cipher.encrypt_in_place(&nonce, b"Some AD", &mut buffer).expect("Unable to encrypt");
+
+// Perform in place decryption
+cipher.decrypt_in_place(&nonce, b"Some AD", &mut buffer).expect("Tag verification failed");
+
+assert_eq!(&buffer, b"a secret message");
+```
+
 ## License
 
 Licensed under either of:
