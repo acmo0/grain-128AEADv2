@@ -129,9 +129,9 @@ macro_rules! test_bad_tag_for {
 mod test_alloc {
     use super::*;
 
-    use grain_128::Grain128;
-    use grain_128::aead::AeadInOut;
-    use grain_128::KeyInit;
+    use grain_128aeadv2::Grain128;
+    use grain_128aeadv2::aead::AeadInOut;
+    use grain_128aeadv2::KeyInit;
 
     test_encrypt_for!(test_encrypt_vec, Vec<u8>);
     test_encrypt_test_vectors_for!(test_encrypt_test_vectors_vec, Vec<u8>);
@@ -145,10 +145,10 @@ mod test_alloc {
 mod test_arrayvec {
     use super::*;
     
-    use grain_128::Grain128;
-    use grain_128::KeyInit;
-    use grain_128::aead::AeadInOut;
-    use grain_128::aead::arrayvec::ArrayVec;
+    use grain_128aeadv2::Grain128;
+    use grain_128aeadv2::KeyInit;
+    use grain_128aeadv2::aead::AeadInOut;
+    use grain_128aeadv2::aead::arrayvec::ArrayVec;
 
     test_encrypt_for!(test_encrypt_arrayvec, ArrayVec<u8, 16>);
     test_encrypt_test_vectors_for!(test_encrypt_test_vectors_arrayvec, ArrayVec<u8, 16>);

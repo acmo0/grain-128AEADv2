@@ -1,5 +1,5 @@
-use grain_128::Grain128;
-use grain_128::KeyInit;
+use grain_128aeadv2::Grain128;
+use grain_128aeadv2::KeyInit;
 
 #[test]
 #[cfg(feature = "vec")]

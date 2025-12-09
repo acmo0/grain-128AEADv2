@@ -16,7 +16,7 @@
 //! If you don't want to use the module to generate the keys :
 #![cfg_attr(feature = "vec", doc = "```")]
 #![cfg_attr(not(feature = "vec"), doc = "```ignore")]
-//! use grain_128::{
+//! use grain_128aeadv2::{
 //!     Grain128, Key, Nonce,
 //!     aead::{Aead, KeyInit, AeadCore}
 //! };
@@ -46,7 +46,7 @@
 //!
 #![cfg_attr(all(feature = "vec", feature = "getrandom"), doc = "```")]
 #![cfg_attr(not(all(feature = "vec", feature = "getrandom")), doc = "```ignore")]
-//! use grain_128::{Grain128, aead::{Aead, AeadCore, KeyInit}};
+//! use grain_128aeadv2::{Grain128, aead::{Aead, AeadCore, KeyInit}};
 //!
 //! let key = Grain128::generate_key().expect("Unable to generate key");
 //! let cipher = Grain128::new(&key);
@@ -89,7 +89,7 @@
     not(all(feature = "getrandom", feature = "arrayvec")),
     doc = "```ignore"
 )]
-//! use grain_128::{
+//! use grain_128aeadv2::{
 //!     Grain128, Key, Nonce,
 //!     aead::{AeadCore, AeadInOut, KeyInit, arrayvec::ArrayVec}
 //! };
@@ -116,7 +116,7 @@
     not(all(feature = "getrandom", feature = "alloc")),
     doc = "```ignore"
 )]
-//! use grain_128::{
+//! use grain_128aeadv2::{
 //!     Grain128, Key, Nonce,
 //!     aead::{AeadCore, AeadInOut, KeyInit, arrayvec::ArrayVec}
 //! };
@@ -199,7 +199,7 @@ impl Grain128 {
     /// data that will be authenticated too.
     ///
     /// ```
-    /// use grain_128::{Grain128, KeyInit};
+    /// use grain_128aeadv2::{Grain128, KeyInit};
     /// 
     /// let key = b"my secret key !!";
     /// let cipher = Grain128::new(key.into());
@@ -229,7 +229,7 @@ impl Grain128 {
     /// associated data if any.
     ///
     /// ```
-    /// use grain_128::{Grain128, KeyInit};
+    /// use grain_128aeadv2::{Grain128, KeyInit};
     /// 
     /// let key = b"my secret key !!";
     /// let cipher = Grain128::new(key.into());
