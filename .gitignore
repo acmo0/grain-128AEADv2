@@ -3,3 +3,4 @@ tarpaulin-report.html
 flamegraph.svg
 perf.data*
 proptest-regressions/
+Cargo.lock
