@@ -2,6 +2,7 @@ use grain_128::Grain128;
 use grain_128::KeyInit;
 
 #[test]
+#[cfg(feature = "vec")]
 fn test_encrypt_decrypt_aead() {
 
     // Init and load keys into the cipher
@@ -12,5 +13,5 @@ fn test_encrypt_decrypt_aead() {
     let cipher = Grain128::new(&key.into());
     
     let (encrypted, tag) = cipher.encrypt_aead(&nonce.into(), b"this is authenticated data", &pt);
-    let decrypted = cipher.decrypt_aead(&nonce.into(), b"this is authenticated data", &encrypted, &tag).expect("Unable to decrypt");
+    cipher.decrypt_aead(&nonce.into(), b"this is authenticated data", &encrypted, &tag).expect("Unable to decrypt");
 }

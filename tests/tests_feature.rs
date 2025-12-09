@@ -25,7 +25,7 @@ macro_rules! test_encrypt_for {
                 buffer.push(i);
             }
 
-            let mut cipher = Grain128::new(&key.into());
+            let cipher = Grain128::new(&key.into());
             
             cipher.encrypt_in_place(&nonce.into(), b"this is authenticated data", &mut buffer).expect("Unable to encrypt");
             cipher.decrypt_in_place(&nonce.into(), b"this is authenticated data", &mut buffer).expect("Unable to decrypt");
@@ -45,7 +45,7 @@ macro_rules! test_encrypt_test_vectors_for {
 
             
             let mut buffer = <$type>::new();
-            let mut cipher = Grain128::new(&key.into());
+            let cipher = Grain128::new(&key.into());
             
 
             cipher.encrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to encrypt");
@@ -57,14 +57,14 @@ macro_rules! test_encrypt_test_vectors_for {
             let ct = 0x96d1bda7ae11f0bau128;
             // Init and load keys into the cipher
             let key:[u8; 16] = core::array::from_fn(|i| i as u8);
-            let nonce:[u8; 12] = core::array::from_fn(|i| i as u8);;
+            let nonce:[u8; 12] = core::array::from_fn(|i| i as u8);
             let ad: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
             let mut buffer = <$type>::new();
             for i in 0..8 {
                 buffer.push(i);
             }
 
-            let mut cipher = Grain128::new(&key.into());    
+            let cipher = Grain128::new(&key.into());    
             cipher.encrypt_in_place(&nonce.into(), &ad, &mut buffer).expect("Unable to encrypt");
 
             
@@ -91,7 +91,7 @@ macro_rules! test_bad_ct_for {
                 buffer.push(i);
             }
 
-            let mut cipher = Grain128::new(&key.into());
+            let cipher = Grain128::new(&key.into());
             
             cipher.encrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to encrypt");
             buffer[0] = 0;
@@ -114,7 +114,7 @@ macro_rules! test_bad_tag_for {
                 buffer.push(i);
             }
 
-            let mut cipher = Grain128::new(&key.into());
+            let cipher = Grain128::new(&key.into());
             
             cipher.encrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to encrypt");
             buffer[10] = 0;
@@ -130,10 +130,8 @@ mod test_alloc {
     use super::*;
 
     use grain_128::Grain128;
-    use grain_128::aead::AeadInPlace;
+    use grain_128::aead::AeadInOut;
     use grain_128::KeyInit;
-    use grain_128::aead::inout::InOutBuf;
-    use grain_128::aead::Buffer;
 
     test_encrypt_for!(test_encrypt_vec, Vec<u8>);
     test_encrypt_test_vectors_for!(test_encrypt_test_vectors_vec, Vec<u8>);
@@ -148,9 +146,8 @@ mod test_arrayvec {
     use super::*;
     
     use grain_128::Grain128;
-    use grain_128::aead::AeadInPlace;
     use grain_128::KeyInit;
-    use grain_128::aead::Buffer;
+    use grain_128::aead::AeadInOut;
     use grain_128::aead::arrayvec::ArrayVec;
 
     test_encrypt_for!(test_encrypt_arrayvec, ArrayVec<u8, 16>);

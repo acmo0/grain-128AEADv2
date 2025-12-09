@@ -1,4 +1,4 @@
-extern crate alloc;
+#[cfg(feature = "vec")]
 use alloc::vec::Vec;
 
 use aead::{
@@ -19,7 +19,11 @@ use crate::traits::{
     Accumulator,
 };
 
-use crate::utils;
+use crate::utils::{
+    self,
+    get_2bytes_at_bit,
+    get_4bytes_at_bit
+};
 
 pub(crate) struct GrainCore {
     lfsr: GrainLfsr,
@@ -28,9 +32,6 @@ pub(crate) struct GrainCore {
     auth_register: GrainAuthRegister,
 }
 
-
-
-    
 impl GrainCore {
 
     /// Init a new instance of Grain-128AEADv2 as specified 
@@ -218,29 +219,31 @@ impl GrainCore {
             }
         };
 
-        // Auth data
-        for i in (0..(encoded_len.len() - 1)).step_by(2) {
+        // Authenticate the additionnal data len representation
+        let (blocks, last_block) = encoded_len.as_chunks::<2>();
+        
+        for block in blocks {
             let (_, auth_stream) = self.get_stream16();
-            self.auth_byte(&((&auth_stream & 0xff) as u8), &encoded_len[i]);
-            self.auth_byte(&((&auth_stream >> 8) as u8), &encoded_len[i+1]);
+            self.auth_2bytes(&auth_stream, block);
+        }
+        
+        if !last_block.is_empty() {
+            let (_, auth_stream) = self.get_stream8();
+            self.auth_byte(&auth_stream, &last_block[0]);
         }
 
-        if (encoded_len.len() & 1) == 1 {
-            let (_, auth_stream) = self.get_stream8();
-            self.auth_byte(&auth_stream, &encoded_len[encoded_len.len() - 1])
+        
+        // Authenticate additionnal data
+        let (blocks, last_block) = authenticated_data.as_chunks::<2>();
+        
+        for block in blocks {
+            let (_, auth_stream) = self.get_stream16();
+            self.auth_2bytes(&auth_stream, block);
         }
-        // Auth data
-        if !authenticated_data.is_empty() {
-            for i in (0..(authenticated_data.len() - 1)).step_by(2) {
-                let (_, auth_stream) = self.get_stream16();
-                self.auth_byte(&((&auth_stream & 0xff) as u8), &authenticated_data[i]);
-                self.auth_byte(&((&auth_stream >> 8) as u8), &authenticated_data[i+1]);
-            }
-        }
-
-        if (authenticated_data.len() & 1) == 1 {
+        
+        if !last_block.is_empty() {
             let (_, auth_stream) = self.get_stream8();
-            self.auth_byte(&auth_stream, &authenticated_data[authenticated_data.len() - 1])
+            self.auth_byte(&auth_stream, &last_block[0]);
         }
     }
 
@@ -325,6 +328,7 @@ impl GrainCore {
     /// Encrypts and authenticate a given plaintext, and (potential) additionnal
     /// authenticated data according to the NIST spec. in Section 2.6.1. It returns
     /// the ciphertext and the authentication tag.
+    #[cfg(feature = "vec")]
     pub(crate) fn encrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
         let mut output: Vec<u8> = Vec::with_capacity(data.len());
 
@@ -353,6 +357,7 @@ impl GrainCore {
     /// Decrypts and authenticate a given ciphertext, and (potential) additionnal
     /// authenticated data according to the NIST spec. in Section 2.6.1.
     /// It returns the plaintext if the given tag is correct, otherwise it fails.
+    #[cfg(feature = "vec")]
     pub(crate) fn decrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8], tag: &[u8]) -> Result<Vec<u8>, Error> {
         let mut output: Vec<u8> = Vec::with_capacity(data.len());
 
@@ -450,12 +455,13 @@ mod tests {
     use proptest::prelude::*;
     
 
-    /// Performs an initialization and an encryption
-    /// of an all-zero key/nonce with an empty plaintext.
-    /// It checks the LFSR/NFSR/Accumulator/Register states
-    /// and the computed tag according the the tests
-    /// vectors given in the NIST spec. in Section 7. 
+    // Performs an initialization and an encryption
+    // of an all-zero key/nonce with an empty plaintext.
+    // It checks the LFSR/NFSR/Accumulator/Register states
+    // and the computed tag according the the tests
+    // vectors given in the NIST spec. in Section 7. 
     #[test]
+    #[cfg(feature = "vec")]
     fn test_load_null() {
         // Test vectors from Grain-128AEADv2 spec
         let lfsr_state = 0x8f395a9421b0963364e2ed30679c8ee1u128;
@@ -478,12 +484,13 @@ mod tests {
     }
 
 
-    /// Performs an initialization and an encryption
-    /// of given key/nonce/plaintext/auth data set
-    /// It checks the LFSR/NFSR/Accumulator/Register states
-    /// and the computed ciphertext/tag according the the tests
-    /// vectors given in the NIST spec. in Section 7. 
+    // Performs an initialization and an encryption
+    // of given key/nonce/plaintext/auth data set
+    // It checks the LFSR/NFSR/Accumulator/Register states
+    // and the computed ciphertext/tag according the the tests
+    // vectors given in the NIST spec. in Section 7. 
     #[test]
+    #[cfg(feature = "vec")]
     fn test_load_non_null() {
         // Test vectors from Grain-128AEADv2 spec
         let nfsr_state = 0xb3c2e1b1eec1f08c2d6eae957f6af9d0u128;
@@ -519,10 +526,11 @@ mod tests {
         
     }
 
-    /// Tries to init, encrypt and decrypt without any modification
-    /// of the ciphertext. It checks then that we indeed retrieve
-    /// the right decrypted plaintext.
+    // Tries to init, encrypt and decrypt without any modification
+    // of the ciphertext. It checks then that we indeed retrieve
+    // the right decrypted plaintext.
     #[test]
+    #[cfg(feature = "vec")]
     fn test_encrypt_decrypt() {
         // Plaintext / authenticated data from test vectors
         let ad = (0x0001020304050607u64).to_be_bytes();
@@ -533,23 +541,24 @@ mod tests {
             0, 0
         );
         
-        let (encrypted, tag) = cipher.encrypt_aead(&[], &pt);
+        let (encrypted, tag) = cipher.encrypt_aead(&ad, &pt);
 
         // Init and load keys into the cipher
         cipher = GrainCore::new(
             0, 0
         );
 
-        let decrypted = cipher.decrypt_aead(&[], &encrypted, &tag).expect("Unable to decrypt");
+        let decrypted = cipher.decrypt_aead(&ad, &encrypted, &tag).expect("Unable to decrypt");
 
         assert_eq!(decrypted, pt);
     }
 
-    /// Tries to init, encrypt and decrypt but while modifying
-    /// the ciphertext. This should fail because the tag is
-    /// no longer valid.
+    // Tries to init, encrypt and decrypt but while modifying
+    // the ciphertext. This should fail because the tag is
+    // no longer valid.
     #[test]
     #[should_panic(expected = "Unable to decrypt")]
+    #[cfg(feature = "vec")]
     fn test_encrypt_decrypt_wrong_ct() {
         // Plaintext / authenticated data from test vectors
         let ad = (0x0001020304050607u64).to_be_bytes();
@@ -574,11 +583,12 @@ mod tests {
         assert_eq!(decrypted, pt);
     }
 
-    /// Tries to init, encrypt and decrypt but while modifying
-    /// the tag. It should fail because the tag is not valid
-    /// anymore.
+    // Tries to init, encrypt and decrypt but while modifying
+    // the tag. It should fail because the tag is not valid
+    // anymore.
     #[test]
     #[should_panic(expected = "Unable to decrypt")]
+    #[cfg(feature = "vec")]
     fn test_encrypt_decrypt_wrong_ad() {
         // Plaintext / authenticated data from test vectors
         let ad = (0x0001020304050607u64).to_be_bytes();
@@ -603,11 +613,11 @@ mod tests {
     }
 
 
-    /// Tries to init a new Grain128-AEADv2 cipher with an
-    /// nonce that is too big acc. to the specs
+    // Tries to init a new Grain128-AEADv2 cipher with an
+    // nonce that is too big acc. to the specs
     proptest! {
         #[test]
-        #[should_panic]
+        #[should_panic(expected = "Unable to init Grain-128AEADv2, IV is too big (must be 12 bytes)")]
         fn test_init_too_big(iv in (1 << 96)..(u128::MAX)) {
             GrainCore::new(0, iv);
         }

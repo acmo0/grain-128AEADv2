@@ -40,9 +40,6 @@ mod tests {
     use super::*;
     use crate::utils;
     use proptest::prelude::*;
-    
-    extern crate std;
-    use std::mem;
 
     struct Lfsr {
         pub(crate) state: u128,

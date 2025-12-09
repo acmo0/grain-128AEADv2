@@ -5,45 +5,17 @@
     html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg"
 )]
 #![deny(unsafe_code)]
-#![warn(missing_docs, rust_2018_idioms)]
+#![warn(missing_docs)]
 
 
 
 //! ## Quickstart
 //!
-//! Basic usage (no features):
-//!
-#![cfg_attr(feature = "getrandom", doc = "```")]
-#![cfg_attr(not(feature = "getrandom"), doc = "```ignore")]
-//! use grain_128::{
-//!     Grain128, Key, Nonce,
-//!     aead::{Aead, KeyInit, AeadCore}
-//! };
-//!
-//! let key = Grain128::generate_key().expect("Unable to generate key");
-//! let cipher = Grain128::new(&key);
-//!
-//! // A nonce must be USED ONLY ONCE !
-//! let nonce = Grain128::generate_nonce().expect("Unable to generate nonce");
-//! let (ciphertext, tag) = cipher.encrypt_aead(
-//!     &nonce,
-//!     b"Some additionnal data",
-//!     b"this is a secret message"
-//! );
-//!
-//! let plaintext = cipher.decrypt_aead(
-//!     &nonce,
-//!     b"Some additionnal data",
-//!     &ciphertext,
-//!     &tag
-//! ).expect("Tag verification failed");
-//!
-//! assert_eq!(&plaintext, b"this is a secret message"); 
-//!
-//! ```
+//! Basic usage (with default `vec` feature):
 //!
 //! If you don't want to use the module to generate the keys :
-//! ```
+#![cfg_attr(feature = "vec", doc = "```")]
+#![cfg_attr(not(feature = "vec"), doc = "```ignore")]
 //! use grain_128::{
 //!     Grain128, Key, Nonce,
 //!     aead::{Aead, KeyInit, AeadCore}
@@ -72,8 +44,8 @@
 //! ```
 //! With randomly sampled keys and nonces (requires `getrandom` feature):
 //!
-#![cfg_attr(feature = "getrandom", doc = "```")]
-#![cfg_attr(not(feature = "getrandom"), doc = "```ignore")]
+#![cfg_attr(all(feature = "vec", feature = "getrandom"), doc = "```")]
+#![cfg_attr(not(all(feature = "vec", feature = "getrandom")), doc = "```ignore")]
 //! use grain_128::{Grain128, aead::{Aead, AeadCore, KeyInit}};
 //!
 //! let key = Grain128::generate_key().expect("Unable to generate key");
@@ -167,6 +139,7 @@
 //! assert_eq!(&buffer, b"a secret message");
 //! ```
 
+#[cfg(feature = "vec")]
 #[macro_use]
 extern crate alloc;
 
@@ -186,6 +159,8 @@ mod test_utils;
 
 use grain_core::GrainCore;
 
+
+/// Grain-128AEADv2 cipher.
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 pub struct Grain128 {
     pub(crate) key: u128,
@@ -217,7 +192,7 @@ impl AeadCore for Grain128 {
 }
 
 
-
+#[cfg(feature = "vec")]
 impl Grain128 {
     /// Init a new grain128-AEADv2 cipher for the given nonce
     /// and encrypts the plaintext. One may provide associated
@@ -229,7 +204,12 @@ impl Grain128 {
     /// let key = b"my secret key !!";
     /// let cipher = Grain128::new(key.into());
     ///
-    /// let (ciphertext, nonce) = cipher.encrypt_aead(b"super nonce!".into(), b"this is associated data", b"my secrets");
+    /// // A nonce must be USED ONLY ONCE !
+    /// let (ciphertext, tag) = cipher.encrypt_aead(
+    ///     b"super nonce!".into(),
+    ///     b"this is associated data",
+    ///     b"my secret"
+    /// );
     /// ```
     pub fn encrypt_aead(&self, nonce: &Nonce<Self>, associated_data: &[u8], plaintext: &[u8]) -> (Vec<u8>, Tag<Self>){
         let mut nonce_int: u128 = 0;
@@ -254,10 +234,20 @@ impl Grain128 {
     /// let key = b"my secret key !!";
     /// let cipher = Grain128::new(key.into());
     ///
-    /// let (ciphertext, tag) = cipher.encrypt_aead(b"super nonce!".into(), b"this is associated data", b"my secrets");
-    /// let decrypted = cipher.decrypt_aead(b"super nonce!".into(), b"this is associated data", &ciphertext, &tag).expect("Unable to decrypt");
+    /// // A nonce must be USED ONLY ONCE !
+    /// let (ciphertext, tag) = cipher.encrypt_aead(
+    ///     b"super nonce!".into(),
+    ///     b"this is associated data",
+    ///     b"my secret"
+    /// );
+    /// let decrypted = cipher.decrypt_aead(
+    ///     b"super nonce!".into(),
+    ///     b"this is associated data",
+    ///     &ciphertext,
+    ///     &tag
+    /// ).expect("Unable to decrypt");
     ////
-    /// assert_eq!(decrypted, b"my secrets");
+    /// assert_eq!(decrypted, b"my secret");
     /// ```
     pub fn decrypt_aead(&self, nonce: &Nonce<Self>, associated_data: &[u8], ciphertext: &[u8], expected_tag: &Tag<Self>) -> Result<Vec<u8>, Error> {
         let mut nonce_int: u128 = 0;

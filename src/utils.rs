@@ -3,6 +3,8 @@ use core::ops::{
     BitAnd,
     Shr,
 };
+
+#[cfg(feature = "vec")]
 use alloc::vec::Vec;
 
 /// Returns the i-th bit of an unsigned integer. Mostly useful to bootstrap/make more comprehensive code.
@@ -108,9 +110,6 @@ mod tests {
     extern crate std;
     use std::mem;
 
-    // ********************************
-    // Tests for `get_ith_bit` function
-    // ********************************
     // We can test every values for u8 and u16 to assert that
     // our function get_ith_bit is working well. We can't do
     // the same for "bigger" types (e.g u32, .., u128).
@@ -132,6 +131,7 @@ mod tests {
         }
     }
 
+    
     // Define a macro to generate a test function base on proptest module
     // to perform unit/property tests on u32, ..., u128. 
     macro_rules! test_get_ith_bit_function_for {
@@ -151,9 +151,7 @@ mod tests {
     test_get_ith_bit_function_for!(test_get_ith_bit_u128, u128);
     
 
-    // ********************************
-    // Tests for `get_byte_at_bit` function
-    // ********************************
+    
     // Define a macro to generate a test function based on proptest module
     // to perform unit/property tests of evaluate_poly.
     macro_rules! test_get_byte_at_bit_for {
@@ -225,5 +223,38 @@ mod tests {
             };
             assert_eq!(encoded_size, l);
         }
+    }
+
+
+    // Test deinterleave16
+    #[test]
+    fn test_deinterleave16() {
+        let i = 0b1010101010101010;
+        let (x, y) = deinterleave16(&i);
+
+        assert_eq!(x, 0);
+        assert_eq!(y, 255);
+        
+        let j = 0b0101010101010101;
+        let (x, y) = deinterleave16(&j);
+
+        assert_eq!(y, 0);
+        assert_eq!(x, 255);
+    }
+
+    // Test deinterleave32
+    #[test]
+    fn test_deinterleave32() {
+        let i = 0b10101010101010101010101010101010;
+        let (x, y) = deinterleave32(&i);
+
+        assert_eq!(x, 0);
+        assert_eq!(y, 0xffff);
+        
+        let j = 0b01010101010101010101010101010101;
+        let (x, y) = deinterleave32(&j);
+
+        assert_eq!(y, 0);
+        assert_eq!(x, 0xffff);
     }
 }
