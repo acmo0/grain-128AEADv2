@@ -18,7 +18,7 @@ pub trait Xfsr<T: PrimInt> {
 
         let state = self.get_state();
 
-        let output = T::from(&state & mask).expect("Unable to clock xFSR");
+        let output = T::from(state & mask).expect("Unable to clock xFSR");
 
         self.set_state(
             (state >> size) | (self.feedback_function() << (128 - size))
@@ -30,7 +30,7 @@ pub trait Xfsr<T: PrimInt> {
 
 
 pub trait Accumulator<T> {
-    fn accumulate(&mut self, new: &T) -> T;
+    fn accumulate(&mut self, new: T) -> T;
     fn new() -> Self;
 }
 

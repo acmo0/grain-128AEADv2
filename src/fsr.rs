@@ -1,6 +1,6 @@
 use crate::utils::{
-    get_ith_bit,
     get_2bytes_at_bit,
+    get_4bytes_at_bit,
 };
 
 use crate::traits::{
@@ -29,10 +29,12 @@ impl GrainLfsr {
 /// Clock sixteen bits at once to speed up 
 /// keystream & authentication stream generation.
 impl Xfsr<u16> for GrainLfsr {
+    
     fn get_state(&self) -> u128 {
         self.state
     }
 
+    
     fn set_state(&mut self, new_value: u128) {
         self.state = new_value;
     }
@@ -40,8 +42,10 @@ impl Xfsr<u16> for GrainLfsr {
     /// - compute s' = s0 + s7 + s38 + s70 + s81 + s96
     /// - set the new state : s127 = s'
     /// - riht shift the remaining bits by one 
+    ///
     /// (i.e s126 = s127, ..., s0 = s1)
-    /// **The update is done on 16 bits directly (i.e 16 clocks)
+    /// **The update is done on 16 bits directly (i.e 16 clocks)**
+    
     fn feedback_function(&self) -> u128 {
         (get_2bytes_at_bit(&self.state, 0) ^
             get_2bytes_at_bit(&self.state, 7) ^
@@ -52,6 +56,44 @@ impl Xfsr<u16> for GrainLfsr {
     }
 }
 
+/// Clock thirty-two bits at once to speed up 
+/// keystream & authentication stream generation.
+impl Xfsr<u32> for GrainLfsr {
+    
+    fn get_state(&self) -> u128 {
+        self.state
+    }
+
+    
+    fn set_state(&mut self, new_value: u128) {
+        self.state = new_value;
+    }
+    /// Update the grain's LFSR state according to the spec :
+    /// - compute s' = s0 + s7 + s38 + s70 + s81 + s96
+    /// - set the new state : s127 = s'
+    /// - riht shift the remaining bits by one 
+    ///
+    /// (i.e s126 = s127, ..., s0 = s1)
+    /// **The update is done on 16 bits directly (i.e 16 clocks)**
+    
+    fn feedback_function(&self) -> u128 {
+        (get_4bytes_at_bit(&self.state, 0) ^
+            get_4bytes_at_bit(&self.state, 7) ^
+            get_4bytes_at_bit(&self.state, 38) ^
+            get_4bytes_at_bit(&self.state, 70) ^
+            get_4bytes_at_bit(&self.state, 81) ^
+            get_4bytes_at_bit(&self.state, 96)) as u128
+    }
+}
+/*
+u32 y = (bt(12) & st(8)) ^ (st(13) & st(20)) ^ (bt(95) & st(42)) ^ (st(60) & st(79)) ^ (bt(12) & bt(95) & st(94))
+        ^ st(93) ^ bt(2) ^ bt(15) ^ bt(36) ^ bt(45) ^ bt(64) ^ bt(73) ^ bt(89);
+
+    u32 nn = st(0) ^ bt(0) ^ bt(26) ^ bt(56) ^ bt(91) ^ bt(96) ^ (bt(3) & bt(67)) ^ (bt(11) & bt(13))
+        ^ (bt(17) & bt(18)) ^ (bt(27) & bt(59)) ^ (bt(40) & bt(48)) ^ (bt(61) & bt(65)) ^ (bt(68) & bt(84))
+        ^ (bt(22) & bt(24) & bt(25)) ^ (bt(70) & bt(78) & bt(82)) ^ (bt(88) & bt(92) & bt(93) & bt(95));
+
+    u32 ln = st(0) ^ st(7) ^ st(38) ^ st(70) ^ st(81) ^ st(96);*/
 
 /// Core structure for the Grain128-AEADv2 NFSR
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
@@ -61,24 +103,31 @@ pub struct GrainNfsr {
 
 impl GrainNfsr {
     /// Return a new Grain LFSR initialized with the given state
-    pub fn new(initial_state: u128) -> GrainNfsr {
+    pub fn new(initial_state: u128) -> Self {
         GrainNfsr {
             state: initial_state,
         }
     }
 
-    pub fn xor_last_2bytes(&mut self, bytes: u16) -> () {
+    
+    pub fn xor_last_2bytes(&mut self, bytes: u16) {
         self.state ^= (bytes as u128) << 112;
     }
 
+    
+    pub fn xor_last_4bytes(&mut self, bytes: u32) {
+        self.state ^= (bytes as u128) << 96;
+    }
 }
 
 
 impl Xfsr<u16> for GrainNfsr {
+    
     fn get_state(&self) -> u128 {
         self.state
     }
 
+    
     fn set_state(&mut self, new_value: u128) {
         self.state = new_value;
     }
@@ -121,6 +170,54 @@ impl Xfsr<u16> for GrainNfsr {
 
 }
 
+impl Xfsr<u32> for GrainNfsr {
+    
+    fn get_state(&self) -> u128 {
+        self.state
+    }
+
+    
+    fn set_state(&mut self, new_value: u128) {
+        self.state = new_value;
+    }
+    /// Update the grain's NFSR state accord to the spec
+    /// EXCEPT that the feedback bit is not xored with
+    /// the bit from the grain LFSR output
+    fn feedback_function(&self) -> u128 {
+        let output = (get_4bytes_at_bit(&self.state, 0) ^
+            get_4bytes_at_bit(&self.state, 26) ^
+            get_4bytes_at_bit(&self.state, 56) ^
+            get_4bytes_at_bit(&self.state, 91) ^
+            get_4bytes_at_bit(&self.state, 96) ^
+            get_4bytes_at_bit(&self.state, 3) & get_4bytes_at_bit(&self.state, 67) ^
+            get_4bytes_at_bit(&self.state, 11) & get_4bytes_at_bit(&self.state, 13) ^
+            get_4bytes_at_bit(&self.state, 17) & get_4bytes_at_bit(&self.state, 18) ^
+            get_4bytes_at_bit(&self.state, 27) & get_4bytes_at_bit(&self.state, 59) ^
+            get_4bytes_at_bit(&self.state, 40) & get_4bytes_at_bit(&self.state, 48) ^
+            get_4bytes_at_bit(&self.state, 61) & get_4bytes_at_bit(&self.state, 65) ^
+            get_4bytes_at_bit(&self.state, 68) & get_4bytes_at_bit(&self.state, 84) ^
+            (
+                get_4bytes_at_bit(&self.state, 22) &
+                get_4bytes_at_bit(&self.state, 24) &
+                get_4bytes_at_bit(&self.state, 25)
+            ) ^
+            (
+                get_4bytes_at_bit(&self.state, 70) &
+                get_4bytes_at_bit(&self.state, 78) &
+                get_4bytes_at_bit(&self.state, 82)
+            ) ^
+            (
+                get_4bytes_at_bit(&self.state, 88) &
+                get_4bytes_at_bit(&self.state, 92) &
+                get_4bytes_at_bit(&self.state, 93) &
+                get_4bytes_at_bit(&self.state, 95)
+            )) as u128;
+
+        debug_assert!(output < (1u128 << 32));
+        output
+    }
+
+}
 
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 pub struct GrainAuthAccumulator {
@@ -141,10 +238,11 @@ pub struct GrainAuthRegister {
 }
 
 impl Accumulator<u8> for GrainAuthRegister {
-    fn accumulate(&mut self, new: &u8) -> u8 {
+
+    fn accumulate(&mut self, new: u8) -> u8 {
         let output = self.state & 1;
         self.state >>= 1;
-        self.state |= (*new as u64) << 63;
+        self.state |= (new as u64) << 63;
 
         output as u8
     }

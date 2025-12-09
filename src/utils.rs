@@ -26,6 +26,7 @@ where
 }
 
 /// Extract the next 16 bits starting from a given position.
+
 pub fn get_2bytes_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u16
 where 
     for<'a> &'a T: Shr<usize, Output = T> 
@@ -34,6 +35,47 @@ where
         (value >> index) & T::from_u16(0xffff).expect("Unable to get the given byte")
     ).to_u16()
      .expect("Unable extract the given byte index")
+}
+
+
+pub fn get_4bytes_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u32
+where 
+    for<'a> &'a T: Shr<usize, Output = T> 
+{
+    (
+        (value >> index) & T::from_u32(0xffffffff).expect("Unable to get the given byte")
+    ).to_u32()
+     .expect("Unable extract the given byte index")
+}
+
+
+pub fn deinterleave32(input: &u32) -> (u16, u16) {
+
+    let input = *input as u64;
+    let mut output = (((input) << 31) | input) & 0x5555555555555555;
+    output = (output | (output >> 1)) & 0x3333333333333333;
+    output = (output | (output >> 2)) & 0x0f0f0f0f0f0f0f0f;
+    output = (output | (output >> 4)) & 0x00ff00ff00ff00ff;
+    output = output | (output >> 8);
+
+    (
+        (output & 0xffff) as u16,
+        (output >> 32) as u16
+    )
+}
+
+pub fn deinterleave16(input: &u16) -> (u8, u8) {
+
+    let input = *input as u32;
+    let mut output = (((input) << 15) | input) & 0x55555555;
+    output = (output | (output >> 1)) & 0x33333333;
+    output = (output | (output >> 2)) & 0x0f0f0f0f;
+    output = output | (output >> 4);
+    
+    (
+        (output & 0xff) as u8,
+        (output >> 16) as u8
+    )
 }
 
 /// Encode a length according to Grain spec

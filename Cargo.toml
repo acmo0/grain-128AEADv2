@@ -17,11 +17,11 @@ default-features = false
 zeroize = ["dep:zeroize"]
 alloc = ["aead/alloc"]
 arrayvec = ["aead/arrayvec"]
+getrandom = ["aead/getrandom"]
+rand_core = ["aead/rand_core"]
 
 [profile.release]
 debug = true
-codegen-unti = 1
-lto = "thin"
 
 [dev-dependencies]
 proptest = "1.9.0"

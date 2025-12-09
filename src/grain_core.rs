@@ -3,7 +3,8 @@ use alloc::vec::Vec;
 
 use aead::{
     Error,
-    inout::InOutBuf
+    inout::InOutBuf,
+    consts::U2,
 };
 
 use crate::fsr::{
@@ -18,11 +19,7 @@ use crate::traits::{
     Accumulator,
 };
 
-use crate::utils::{
-    self,
-    get_2bytes_at_bit,
-};
-
+use crate::utils;
 
 pub(crate) struct GrainCore {
     lfsr: GrainLfsr,
@@ -31,6 +28,9 @@ pub(crate) struct GrainCore {
     auth_register: GrainAuthRegister,
 }
 
+
+
+    
 impl GrainCore {
 
     /// Init a new instance of Grain-128AEADv2 as specified 
@@ -51,40 +51,39 @@ impl GrainCore {
 
 
         // Clock 320 times and re-input the feedback to both LFSR and NFSR
-        for _i in 0..20 {
-            let fb: u128 = cipher.clock_u16() as u128;
-            cipher.lfsr.state ^= fb << 112;
-            cipher.nfsr.state ^= fb << 112;
+        for _i in 0..10 {
+            let fb: u128 = cipher.clock_u32() as u128;
+            cipher.lfsr.state ^= fb << 96;
+            cipher.nfsr.state ^= fb << 96;
         }
         
         // Clock 64 times and re-input the feedback to both LFSR and NFSR
         // + re-introduce key
-        for i in 0..4 {
-            let fb = cipher.clock_u16();
-            cipher.lfsr.state ^= ((fb ^ get_2bytes_at_bit(&key, i * 16 + 64)) as u128) << 112;
-            cipher.nfsr.state ^= ((fb ^ get_2bytes_at_bit(&key, i * 16)) as u128) << 112;
+        for i in [0, 32] {
+            let fb = cipher.clock_u32();
+            cipher.lfsr.state ^= ((fb ^ get_4bytes_at_bit(&key, i + 64)) as u128) << 96;
+            cipher.nfsr.state ^= ((fb ^ get_4bytes_at_bit(&key, i)) as u128) << 96;
         }
         
         // Init the accumulator
-        let mut acc_state: u64 = 0;
-        for i in 0..4 {
-            let fb: u64 = cipher.clock_u16() as u64;
-            acc_state |= fb << i * 16
-        }
-        cipher.auth_accumulator.state = acc_state;
+        let fb1 = cipher.clock_u32() as u64;
+        let fb2 = cipher.clock_u32() as u64;
+        cipher.auth_accumulator.state = (fb2 << 32) | fb1;
 
         // Init the register
-        let mut reg_state: u64 = 0;
-        for i in 0..4 {
-            let fb: u64 = cipher.clock_u16() as u64;
-            
-            reg_state |= fb << i * 16
-        }
-        cipher.auth_register.state = reg_state;
+        let fb1 = cipher.clock_u32() as u64;
+        let fb2 = cipher.clock_u32() as u64;
+        cipher.auth_register.state = (fb2 << 32) | fb1;
 
         cipher
     }
 
+
+    /* 
+        #########################################################
+        # Code related to clocking the cipher (by 2 ou 4 bytes) #
+        #########################################################
+    */
     /// Clock 16 times at once the cipher to optimize software
     /// implementation because we're working at byte-level. This
     /// returns the pre-output according to NIST spec. in Section 2.1
@@ -114,54 +113,179 @@ impl GrainCore {
 
         // Clock/update the xFSRs
         let lfsr_output: u16 = self.lfsr.clock();
-        self.nfsr.clock();
+        let _: u16 =  self.nfsr.clock();
         self.nfsr.xor_last_2bytes(lfsr_output);
+
+        output
+    }
+
+    /// Clock 32 times at once the cipher to optimize software
+    /// implementation because we're working at byte-level. This
+    /// returns the pre-output according to NIST spec. in Section 2.1
+    fn clock_u32(&mut self) -> u32 {
+        // Get the 9 bytes from LFSR/NFSR and compute the
+        // "pre-output" as defined in grain-128AEADv2 spec
+        let x0 = get_4bytes_at_bit(&self.nfsr.state, 12);
+        let x1 = get_4bytes_at_bit(&self.lfsr.state, 8);
+        let x2 = get_4bytes_at_bit(&self.lfsr.state, 13);
+        let x3 = get_4bytes_at_bit(&self.lfsr.state, 20);
+        let x4 = get_4bytes_at_bit(&self.nfsr.state, 95);
+        let x5 = get_4bytes_at_bit(&self.lfsr.state, 42);
+        let x6 = get_4bytes_at_bit(&self.lfsr.state, 60);
+        let x7 = get_4bytes_at_bit(&self.lfsr.state, 79);
+        let x8 = get_4bytes_at_bit(&self.lfsr.state, 94);
+        
+
+        let output = (x0 & x1) ^ (x2 & x3) ^ (x4 & x5) ^ (x6 & x7) ^ (x0 & x4 & x8) ^
+            get_4bytes_at_bit(&self.lfsr.state, 93) ^
+            get_4bytes_at_bit(&self.nfsr.state, 2)  ^
+            get_4bytes_at_bit(&self.nfsr.state, 15) ^
+            get_4bytes_at_bit(&self.nfsr.state, 36) ^
+            get_4bytes_at_bit(&self.nfsr.state, 45) ^
+            get_4bytes_at_bit(&self.nfsr.state, 64) ^
+            get_4bytes_at_bit(&self.nfsr.state, 73) ^
+            get_4bytes_at_bit(&self.nfsr.state, 89);
+
+        // Clock/update the xFSRs
+        let lfsr_output: u32 = self.lfsr.clock();
+        let _: u32 = self.nfsr.clock();
+        self.nfsr.xor_last_4bytes(lfsr_output);
 
         output
     }
 
     /// Update grain-128AEADv2 accumulator according to
     /// NIST spec. in Section 2.3
+    #[inline(always)]
     fn update_auth_accumulator(&mut self) {
         self.auth_accumulator.state ^= self.auth_register.state;
+    }
+
+
+    /*
+        ###############################################################
+        # Code related to encryption/authentication stream generation #
+        ###############################################################
+    */
+    /// Clock 32 times the cipher and extract the streams for
+    /// authentication and encryption/decryption according to
+    /// NIST spec. in Section 2.3.
+    #[inline(always)]
+    fn get_stream16(&mut self) -> (u16, u16){
+        let keystream = self.clock_u32();
+        utils::deinterleave32(&keystream)
     }
 
     /// Clock 16 times the cipher and extract the streams for
     /// authentication and encryption/decryption according to
     /// NIST spec. in Section 2.3.
-    fn get_stream(&mut self) -> (u8, u8){
+    #[inline(always)]
+    fn get_stream8(&mut self) -> (u8, u8){
         let keystream = self.clock_u16();
+        utils::deinterleave16(&keystream)
+    }
 
-        // Extract keystream (at even indexes)
-        let encrypt_stream = {
-            let mut byte = 0u8;
-            for i in 0..8 {
-                byte |= (((keystream >> (i << 1)) & 1) << i) as u8; 
+
+    /*
+        ##################################
+        # Code related to authentication #
+        ##################################
+    */
+    /// Authenticate a single byte of plaintext according to
+    /// NIST spec. in Section 2.3.
+    fn auth_2bytes(&mut self, auth_stream: &u16, data: &[u8]) {
+        // Update the auth register
+        for i in 0..2 {
+            for j in 0..8 {
+                if (data[i] >> j) & 1 == 1u8 {
+                    self.update_auth_accumulator()
+                }
+                self.auth_register.accumulate(((auth_stream >> ((i << 3) + j)) & 1) as u8);
             }
-            byte
+        }
+    }
+
+    /// Authenticate additionnal data according 
+    /// to Grain-128AEADv2 spec. in Section 2.5
+    fn auth_additionnal_data(&mut self, authenticated_data: &[u8]) {
+        // Init the output with the associated data encoded length
+        let encoded_len = {
+            if authenticated_data.is_empty() {
+                vec![0]
+            } else {
+                utils::len_encode(authenticated_data.len())
+
+            }
         };
 
-        // Extract the auth stream (at odd indexes)
-        let auth_stream = {
-            let mut byte = 0u8;
-            for i in 0..8 {
-                byte |= (((keystream >> (1 | i << 1)) & 1) << i) as u8; 
-            }
-            byte
-        };
+        // Auth data
+        for i in (0..(encoded_len.len() - 1)).step_by(2) {
+            let (_, auth_stream) = self.get_stream16();
+            self.auth_byte(&((&auth_stream & 0xff) as u8), &encoded_len[i]);
+            self.auth_byte(&((&auth_stream >> 8) as u8), &encoded_len[i+1]);
+        }
 
-        (encrypt_stream, auth_stream)
+        if (encoded_len.len() & 1) == 1 {
+            let (_, auth_stream) = self.get_stream8();
+            self.auth_byte(&auth_stream, &encoded_len[encoded_len.len() - 1])
+        }
+        // Auth data
+        if !authenticated_data.is_empty() {
+            for i in (0..(authenticated_data.len() - 1)).step_by(2) {
+                let (_, auth_stream) = self.get_stream16();
+                self.auth_byte(&((&auth_stream & 0xff) as u8), &authenticated_data[i]);
+                self.auth_byte(&((&auth_stream >> 8) as u8), &authenticated_data[i+1]);
+            }
+        }
+
+        if (authenticated_data.len() & 1) == 1 {
+            let (_, auth_stream) = self.get_stream8();
+            self.auth_byte(&auth_stream, &authenticated_data[authenticated_data.len() - 1])
+        }
+    }
+
+
+    /*
+        #####################################################################
+        # Code related to encryption/decryption/authentication by 1/2 bytes #
+        #####################################################################
+    */
+    /// Perform the encryption and authentication of 2 bytes
+    /// of data according to NIST spec. in Section 2.3.
+    fn encrypt_and_auth_2bytes(&mut self, data: &[u8]) -> [u8; 2] {
+        let (encrypt_stream, auth_stream) = self.get_stream16();
+
+        // Auth the plaintext byte
+        self.auth_2bytes(&auth_stream, data);
+
+        // Encrypt the plaintext
+        [data[0] ^ ((encrypt_stream & 0xff) as u8), data[1] ^ ((encrypt_stream >> 8) as u8)]
+        
+    }
+
+    /// Perform the decryption and authentication of 2 bytes
+    /// of data according to NIST spec. in Section 2.3.
+    fn decrypt_and_auth_2bytes(&mut self, data: &[u8]) -> [u8; 2] {
+        let (encrypt_stream, auth_stream) = self.get_stream16();
+
+        let output = [
+            data[0] ^ ((encrypt_stream & 0xff) as u8),
+            data[1] ^ ((encrypt_stream >> 8) as u8)
+        ];
+
+        // Auth the plaintext byte
+        self.auth_2bytes(&auth_stream, &output);
+
+        output
+        
     }
 
     /// Perform the encryption and authentication of a single
     /// byte of data according to NIST spec. in Section 2.3.
     fn encrypt_and_auth_byte(&mut self, data: &u8) -> u8 {
-        let (encrypt_stream, auth_stream) = self.get_stream();
+        let (encrypt_stream, auth_stream) = self.get_stream8();
+        self.auth_byte(&auth_stream, data);
 
-        // Auth the plaintext byte
-        self.auth_byte(&auth_stream, &data);
-
-        // Encrypt the plaintext
         data ^ encrypt_stream
         
     }
@@ -169,7 +293,7 @@ impl GrainCore {
     /// Perform the decryption and authentication of a single
     /// byte of data according to NIST spec. in Section 2.3.
     fn decrypt_and_auth_byte(&mut self, data: &u8) -> u8 {
-        let (encrypt_stream, auth_stream) = self.get_stream();
+        let (encrypt_stream, auth_stream) = self.get_stream8();
 
         let output = data ^ encrypt_stream;
 
@@ -187,67 +311,40 @@ impl GrainCore {
             if (data >> i) & 1 == 1u8 {
                 self.update_auth_accumulator()
             }
-            self.auth_register.accumulate(&(((auth_stream >> i) & 1) as u8));
+            self.auth_register.accumulate((auth_stream >> i) & 1);
 
         }
     }
 
-    /// Performs the padding and then the encryption/authentication
-    /// of a given plaintext according the the NIST spec. in Section 2.6.1 
-    fn encrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
-        let mut output: Vec<u8> = Vec::with_capacity(data.len() + 1);
 
-        for b in data {
-            output.push(self.encrypt_and_auth_byte(&b));
-        }
-
-        // Add padding + encrypt/auth
-        self.encrypt_and_auth_byte(&1u8);
-
-        output
-    }
-
-    /// Performs the decryption/authentication of a given
-    /// plaintext according the the NIST spec. in Section 2.6.2
-    fn decrypt_auth(&mut self, data: &[u8]) -> Vec<u8> {
-        let mut output: Vec<u8> = Vec::with_capacity(data.len());
-
-        for b in data {
-            output.push(self.decrypt_and_auth_byte(&b));
-        }
-
-        // Add padding + encrypt/auth
-        self.encrypt_and_auth_byte(&1u8);
-
-        output
-    }
-
+    /*
+        #################################################################
+        # Public functions to encrypt/decrypt without RustCrypto traits #
+        #################################################################
+    */
     /// Encrypts and authenticate a given plaintext, and (potential) additionnal
     /// authenticated data according to the NIST spec. in Section 2.6.1. It returns
     /// the ciphertext and the authentication tag.
     pub(crate) fn encrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8]) -> (Vec<u8>, [u8; 8]) {
-        // Init the output with the associated data encoded length
-        let encoded_len = {
-            if authenticated_data.len() == 0 {
-                vec![0]
-            } else {
-                utils::len_encode(authenticated_data.len())
+        let mut output: Vec<u8> = Vec::with_capacity(data.len());
 
-            }
-        };
-        // Auth data
-        for b in encoded_len {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
+        // Auth additionnal data
+        self.auth_additionnal_data(authenticated_data);
+    
+        // Split plaintext by block of two bytes and encrypt it
+        let (blocks, last_block) = data.as_chunks::<2>();
+
+        for block in blocks {
+            output.extend(self.encrypt_and_auth_2bytes(block))
         }
 
-        // Auth data
-        for b in authenticated_data {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
+        // Potentially encrypt the last byte + add padding
+        if !last_block.is_empty() {
+            output.push(self.encrypt_and_auth_2bytes(&[last_block[0], 1u8])[0]);
+        } else {
+            // Add padding + encrypt/auth
+            self.encrypt_and_auth_byte(&1u8);
         }
-
-        let output = self.encrypt_auth(data);
 
         (output, self.auth_accumulator.state.to_le_bytes())
     }
@@ -257,28 +354,23 @@ impl GrainCore {
     /// authenticated data according to the NIST spec. in Section 2.6.1.
     /// It returns the plaintext if the given tag is correct, otherwise it fails.
     pub(crate) fn decrypt_aead(&mut self, authenticated_data: &[u8], data: &[u8], tag: &[u8]) -> Result<Vec<u8>, Error> {
-        // Init the output with the associated data encoded length
-        let encoded_len = {
-            if authenticated_data.len() == 0 {
-                vec![0]
-            } else {
-                utils::len_encode(authenticated_data.len())
-            }
-        };
+        let mut output: Vec<u8> = Vec::with_capacity(data.len());
 
-        // Auth data
-        for b in encoded_len {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
+        // Authenticate data
+        self.auth_additionnal_data(authenticated_data);
+
+        let (blocks, last_block) = data.as_chunks::<2>();
+
+        for block in blocks {
+            output.extend(self.decrypt_and_auth_2bytes(block));
         }
 
-        // Auth data
-        for b in authenticated_data {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
+        if !last_block.is_empty() {
+            output.push(self.decrypt_and_auth_byte(&last_block[0]));
         }
 
-        let output = self.decrypt_auth(data);
+        // Add padding + encrypt/auth
+        self.encrypt_and_auth_byte(&1u8);
 
         if self.auth_accumulator.state.to_le_bytes().as_slice() != tag {
             return Err(Error);
@@ -287,42 +379,34 @@ impl GrainCore {
         Ok(output)
     }
 
+    /*
+        ##############################################################
+        # Public functions to encrypt/decrypt with RustCrypto traits #
+        ##############################################################
+    */
     /// Encrypts and authenticate a given plaintext, and (potential) additionnal
     /// authenticated data according to the NIST spec. in Section 2.6.1. The
     /// encryption is done in-place to match the RustCrypto traits requirements.
     /// It returns only the tag since the encrypted data is stored in the data
     /// buffer.
-    pub(crate) fn encrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>,) -> [u8; 8] {
-        // Init the output with the associated data encoded length
-        let encoded_len = {
-            if authenticated_data.len() == 0 {
-                vec![0]
-            } else {
-                utils::len_encode(authenticated_data.len())
+    pub(crate) fn encrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], data: InOutBuf<'_, '_, u8>,) -> [u8; 8] {
 
-            }
-        };
-
-        // Auth data
-        for b in encoded_len {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
-        }
-
-        // Auth data
-        for b in authenticated_data {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
-        }
-
+        self.auth_additionnal_data(authenticated_data);
         
-        for i in 0..data.len() {
-            let encrypted_byte = self.encrypt_and_auth_byte(&data.get_in()[i]);
-            data.get_out()[i..(i+1)].copy_from_slice(&[encrypted_byte]);
+        let (blocks, mut last_block) = data.into_chunks::<U2>();
+
+        for mut block in blocks {
+            let encrypted = self.encrypt_and_auth_2bytes(block.get_in());
+            block.get_out().copy_from_slice(&encrypted);
         }
 
-        // Add padding + encrypt/auth
-        self.encrypt_and_auth_byte(&1u8);
+        if !last_block.is_empty() {
+            let encrypted_byte = self.encrypt_and_auth_2bytes(&[last_block.get_in()[0], 1u8])[0];
+            last_block.get_out()[0..1].copy_from_slice(&[encrypted_byte]);
+        } else {
+            // Add padding + encrypt/auth
+            self.encrypt_and_auth_byte(&1u8);
+        }
         
         self.auth_accumulator.state.to_le_bytes()
     }
@@ -331,44 +415,29 @@ impl GrainCore {
     /// authenticated data according to the NIST spec. in Section 2.6.1. The
     /// decryption is done in-place to match the RustCrypto traits requirements.
     /// It fails if the given tag doesn't match the computed tag.
-    pub(crate) fn decrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], mut data: InOutBuf<'_, '_, u8>, tag: &[u8]) -> Result<(), Error> {
+    pub(crate) fn decrypt_auth_aead_inout(&mut self, authenticated_data: &[u8], data: InOutBuf<'_, '_, u8>, tag: &[u8]) -> Result<(), Error> {
 
-        // Init the output with the associated data encoded length
-        let encoded_len = {
-            if authenticated_data.len() == 0 {
-                vec![0]
-            } else {
-                utils::len_encode(authenticated_data.len())
-
-            }
-        };
-
-        // Auth data
-        for b in encoded_len {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
-        }
-
-        // Auth data
-        for b in authenticated_data {
-            let (encrypt_stream, auth_stream) = self.get_stream();
-            self.auth_byte(&auth_stream, &b);
-        }
-
+        self.auth_additionnal_data(authenticated_data);
         
-        for i in 0..data.len() {
-            let decrypted_byte = self.decrypt_and_auth_byte(&data.get_in()[i]);
+        let (blocks, mut last_block) = data.into_chunks::<U2>();
 
-            data.get_out()[i..(i+1)].copy_from_slice(&[decrypted_byte]);
+        for mut block in blocks {
+            let decrypted = self.decrypt_and_auth_2bytes(block.get_in());
+            block.get_out().copy_from_slice(&decrypted);
         }
+
+        if !last_block.is_empty() {
+            let decrypted_byte = self.decrypt_and_auth_byte(&last_block.get_in()[0]);
+            last_block.get_out()[0..1].copy_from_slice(&[decrypted_byte]);
+        }
+
         // Add padding + encrypt/auth
         self.encrypt_and_auth_byte(&1u8);
         
-        
         if tag != self.auth_accumulator.state.to_le_bytes().as_slice() {
-            return Err(Error);
+            Err(Error)
         } else {
-            return Ok(());
+            Ok(())
         }
     }
 }
