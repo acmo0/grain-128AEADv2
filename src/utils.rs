@@ -1,4 +1,6 @@
-use num::traits::{Unsigned, One, ToPrimitive, FromPrimitive};
+use num_traits::cast::{ToPrimitive, FromPrimitive};
+use num_traits::identities::One;
+use num_traits::sign::Unsigned;
 use core::ops::{
     BitAnd,
     Shr,

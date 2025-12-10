@@ -1,4 +1,4 @@
-use num::{PrimInt};
+use num_traits::int::PrimInt;
 
 
 /// Trait that both LFSR and NFSR will implement

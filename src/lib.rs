@@ -1,4 +1,4 @@
-//#![no_std]
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg",
@@ -142,10 +142,10 @@
 #[cfg(feature = "vec")]
 #[macro_use]
 extern crate alloc;
+use alloc::vec::Vec;
 
 pub use aead::{self, Tag, AeadCore, AeadInOut, Error, Key, KeyInit, KeySizeUser, Nonce, array::Array, inout::InOutBuf, consts::{U1, U8, U12, U16}, Buffer};
 use aead::TagPosition;
-
 
 #[cfg(feature = "zeroize")]
 pub use zeroize;
