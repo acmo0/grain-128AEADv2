@@ -95,7 +95,18 @@ macro_rules! test_bad_ct_for {
             
             cipher.encrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to encrypt");
             buffer[0] = 0;
-            cipher.decrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to decrypt");
+            match cipher.decrypt_in_place(&nonce.into(), b"", &mut buffer) {
+                Ok(_) => {panic!("Encryption should fail");}
+                Err(_) => {
+                    // Ensure that the buffer is filled with zeroes
+                    // in case of a tag verification faillure
+                    for i in 0..8 {
+                        assert_eq!(buffer[i], 0);
+                    }
+
+                    panic!("Unable to decrypt");
+                }
+            }
         }
     }
 }
@@ -118,7 +129,20 @@ macro_rules! test_bad_tag_for {
             
             cipher.encrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to encrypt");
             buffer[10] = 0;
-            cipher.decrypt_in_place(&nonce.into(), b"", &mut buffer).expect("Unable to decrypt");
+            match cipher.decrypt_in_place(&nonce.into(), b"", &mut buffer) {
+                Ok(_) => {panic!("Encryption should fail");}
+                Err(_) => {
+                    // Ensure that the buffer is filled with zeroes
+                    // in case of a tag verification faillure
+                    for i in 0..8 {
+                        assert_eq!(buffer[i], 0);
+                    }
+
+                    panic!("Unable to decrypt");
+                }
+            }
+
+            
         }
     }
 }

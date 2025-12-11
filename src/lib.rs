@@ -286,7 +286,7 @@ impl AeadInOut for Grain128 {
         &self,
         nonce: &Nonce<Self>,
         associated_data: &[u8],
-        buffer: InOutBuf<'_, '_, u8>,
+        mut buffer: InOutBuf<'_, '_, u8>,
         tag: &Tag<Self>,
     ) -> Result<(), Error> {
 
@@ -297,7 +297,18 @@ impl AeadInOut for Grain128 {
 
         let mut cipher = GrainCore::new(self.key, nonce_int);
 
-        cipher.decrypt_auth_aead_inout(associated_data, buffer, tag.as_slice())
+        let decrypt_res = cipher.decrypt_auth_aead_inout(associated_data, buffer.reborrow(), tag.as_slice());
+
+        match decrypt_res {
+            Ok(()) => Ok(()),
+            _ => {
+                // Avoid leaking the decrypted ciphertext
+                buffer.get_out().fill(0);
+                // Then return the error
+                Err(Error)
+            }
+        }
+        
 
     }
 }
