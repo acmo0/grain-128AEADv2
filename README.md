@@ -5,9 +5,9 @@
 ![Crates.io Total Downloads](https://img.shields.io/crates/d/grain-128aeadv2)
 ![Crates.io Version](https://img.shields.io/crates/v/grain-128aeadv2)
 
-Efficient pure Rust implementation of LFSR in fibonacci representation.
+Efficient pure Rust implementation of Grain-128AEADv2.
 
-Please see installation details and doc on [crates.io](https://crates.io/crates/lfsr-fibo). 
+Please see installation details and doc on [crates.io](https://crates.io/crates/grain-128aeadv2). 
 
 </div>
 
