@@ -131,8 +131,8 @@ impl GrainCore {
         # Code related to clocking the cipher (by 2 ou 4 bytes) #
         #########################################################
     */
-    // Use macro to generate the pre-output computation function
-    // for 16 and 32 bits at once
+    // Use macro to generate the pre-output computation
+    // function for 16 and 32 bits at once
     clock!(clock_u16, get_2bytes_at_bit, xor_last_2bytes, u16);
     clock!(clock_u32, get_4bytes_at_bit, xor_last_4bytes, u32);
 
