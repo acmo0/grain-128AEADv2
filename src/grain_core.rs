@@ -32,6 +32,52 @@ pub(crate) struct GrainCore {
     auth_register: GrainAuthRegister,
 }
 
+
+// Macro to generate the pre-output of grain according
+// according to grain-128AEADv2 spec. It allows to clock
+// the cipher 8 times, 16 times, 24 times or 32 times
+// at once, enhancing performances.
+// function_name : the name of the generated function
+// byte_getter_function : function the retrieve n bytes from a u128
+// updater_function : the function to update the NFSR (i.e how many bytes to xor with the NFSR state)
+// output_type : the type outputed by the generated function (used also to know how to clock the xFSRs)
+macro_rules! clock {
+    ($function_name:tt, $byte_getter_function:tt, $updater_function: tt, $output_type: ty) => {
+        fn $function_name(&mut self) -> $output_type {
+            // Get the 9 taps from LFSR/NFSR and compute the
+            // "pre-output" as defined in grain-128AEADv2 spec
+            let x0 = $byte_getter_function(&self.nfsr.state, 12);
+            let x1 = $byte_getter_function(&self.lfsr.state, 8);
+            let x2 = $byte_getter_function(&self.lfsr.state, 13);
+            let x3 = $byte_getter_function(&self.lfsr.state, 20);
+            let x4 = $byte_getter_function(&self.nfsr.state, 95);
+            let x5 = $byte_getter_function(&self.lfsr.state, 42);
+            let x6 = $byte_getter_function(&self.lfsr.state, 60);
+            let x7 = $byte_getter_function(&self.lfsr.state, 79);
+            let x8 = $byte_getter_function(&self.lfsr.state, 94);
+            
+
+            let output = (x0 & x1) ^ (x2 & x3) ^ (x4 & x5) ^ (x6 & x7) ^ (x0 & x4 & x8) ^
+                $byte_getter_function(&self.lfsr.state, 93) ^
+                $byte_getter_function(&self.nfsr.state, 2)  ^
+                $byte_getter_function(&self.nfsr.state, 15) ^
+                $byte_getter_function(&self.nfsr.state, 36) ^
+                $byte_getter_function(&self.nfsr.state, 45) ^
+                $byte_getter_function(&self.nfsr.state, 64) ^
+                $byte_getter_function(&self.nfsr.state, 73) ^
+                $byte_getter_function(&self.nfsr.state, 89);
+
+            // Clock/update the xFSRs
+            let lfsr_output: $output_type = self.lfsr.clock();
+            let _: $output_type =  self.nfsr.clock();
+            self.nfsr.$updater_function(lfsr_output);
+
+            output
+        }
+    }
+}
+
+
 impl GrainCore {
 
     /// Init a new instance of Grain-128AEADv2 as specified 
@@ -85,75 +131,10 @@ impl GrainCore {
         # Code related to clocking the cipher (by 2 ou 4 bytes) #
         #########################################################
     */
-    /// Clock 16 times at once the cipher to optimize software
-    /// implementation because we're working at byte-level. This
-    /// returns the pre-output according to NIST spec. in Section 2.1
-    fn clock_u16(&mut self) -> u16 {
-        // Get the 9 bytes from LFSR/NFSR and compute the
-        // "pre-output" as defined in grain-128AEADv2 spec
-        let x0 = get_2bytes_at_bit(&self.nfsr.state, 12);
-        let x1 = get_2bytes_at_bit(&self.lfsr.state, 8);
-        let x2 = get_2bytes_at_bit(&self.lfsr.state, 13);
-        let x3 = get_2bytes_at_bit(&self.lfsr.state, 20);
-        let x4 = get_2bytes_at_bit(&self.nfsr.state, 95);
-        let x5 = get_2bytes_at_bit(&self.lfsr.state, 42);
-        let x6 = get_2bytes_at_bit(&self.lfsr.state, 60);
-        let x7 = get_2bytes_at_bit(&self.lfsr.state, 79);
-        let x8 = get_2bytes_at_bit(&self.lfsr.state, 94);
-        
-
-        let output = (x0 & x1) ^ (x2 & x3) ^ (x4 & x5) ^ (x6 & x7) ^ (x0 & x4 & x8) ^
-            get_2bytes_at_bit(&self.lfsr.state, 93) ^
-            get_2bytes_at_bit(&self.nfsr.state, 2)  ^
-            get_2bytes_at_bit(&self.nfsr.state, 15) ^
-            get_2bytes_at_bit(&self.nfsr.state, 36) ^
-            get_2bytes_at_bit(&self.nfsr.state, 45) ^
-            get_2bytes_at_bit(&self.nfsr.state, 64) ^
-            get_2bytes_at_bit(&self.nfsr.state, 73) ^
-            get_2bytes_at_bit(&self.nfsr.state, 89);
-
-        // Clock/update the xFSRs
-        let lfsr_output: u16 = self.lfsr.clock();
-        let _: u16 =  self.nfsr.clock();
-        self.nfsr.xor_last_2bytes(lfsr_output);
-
-        output
-    }
-
-    /// Clock 32 times at once the cipher to optimize software
-    /// implementation because we're working at byte-level. This
-    /// returns the pre-output according to NIST spec. in Section 2.1
-    fn clock_u32(&mut self) -> u32 {
-        // Get the 9 bytes from LFSR/NFSR and compute the
-        // "pre-output" as defined in grain-128AEADv2 spec
-        let x0 = get_4bytes_at_bit(&self.nfsr.state, 12);
-        let x1 = get_4bytes_at_bit(&self.lfsr.state, 8);
-        let x2 = get_4bytes_at_bit(&self.lfsr.state, 13);
-        let x3 = get_4bytes_at_bit(&self.lfsr.state, 20);
-        let x4 = get_4bytes_at_bit(&self.nfsr.state, 95);
-        let x5 = get_4bytes_at_bit(&self.lfsr.state, 42);
-        let x6 = get_4bytes_at_bit(&self.lfsr.state, 60);
-        let x7 = get_4bytes_at_bit(&self.lfsr.state, 79);
-        let x8 = get_4bytes_at_bit(&self.lfsr.state, 94);
-        
-
-        let output = (x0 & x1) ^ (x2 & x3) ^ (x4 & x5) ^ (x6 & x7) ^ (x0 & x4 & x8) ^
-            get_4bytes_at_bit(&self.lfsr.state, 93) ^
-            get_4bytes_at_bit(&self.nfsr.state, 2)  ^
-            get_4bytes_at_bit(&self.nfsr.state, 15) ^
-            get_4bytes_at_bit(&self.nfsr.state, 36) ^
-            get_4bytes_at_bit(&self.nfsr.state, 45) ^
-            get_4bytes_at_bit(&self.nfsr.state, 64) ^
-            get_4bytes_at_bit(&self.nfsr.state, 73) ^
-            get_4bytes_at_bit(&self.nfsr.state, 89);
-
-        // Clock/update the xFSRs
-        let lfsr_output: u32 = self.lfsr.clock();
-        let _: u32 = self.nfsr.clock();
-        self.nfsr.xor_last_4bytes(lfsr_output);
-
-        output
-    }
+    // Use macro to generate the pre-output computation function
+    // for 16 and 32 bits at once
+    clock!(clock_u16, get_2bytes_at_bit, xor_last_2bytes, u16);
+    clock!(clock_u32, get_4bytes_at_bit, xor_last_4bytes, u32);
 
     /// Update grain-128AEADv2 accumulator according to
     /// NIST spec. in Section 2.3
