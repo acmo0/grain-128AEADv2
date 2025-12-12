@@ -6,32 +6,9 @@ use core::ops::{
     Shr,
 };
 
-#[cfg(feature = "vec")]
-use alloc::vec::Vec;
-
-/// Returns the i-th bit of an unsigned integer. Mostly useful to bootstrap/make more comprehensive code.
-pub fn get_ith_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive>(value: &T, index: usize) -> u8
-where 
-    for<'a> &'a T: Shr<usize, Output = T> 
-{
-    ((value >> index) & T::one()).to_u8().expect("Unable extract the given bit index")
-}
-
-
-/// Extract the next 8 bits starting from a given position.
-pub fn get_byte_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u8
-where 
-    for<'a> &'a T: Shr<usize, Output = T> 
-{
-    (
-        (value >> index) & T::from_u8(0xff).expect("Unable to get the given byte")
-    ).to_u8()
-     .expect("Unable extract the given byte index")
-}
 
 /// Extract the next 16 bits starting from a given position.
-
-pub fn get_2bytes_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u16
+pub(crate) fn get_2bytes_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u16
 where 
     for<'a> &'a T: Shr<usize, Output = T> 
 {
@@ -41,8 +18,8 @@ where
      .expect("Unable extract the given byte index")
 }
 
-
-pub fn get_4bytes_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u32
+/// Extract the next 32 bits starting from a given position.
+pub(crate) fn get_4bytes_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u32
 where 
     for<'a> &'a T: Shr<usize, Output = T> 
 {
@@ -82,10 +59,15 @@ pub fn deinterleave16(input: &u16) -> (u8, u8) {
     )
 }
 
+
 /// Encode a length according to Grain spec
-pub fn len_encode(length: usize) -> Vec<u8> {
+pub fn len_encode(length: usize) -> (usize, [u8; 9]) {
+    let mut output = [0u8; 9];
+
     if length <= 127 {
-        vec![length as u8]
+        output[0] = length as u8;
+
+        (1usize, output)    
     } else {
         let lenght_bytes = length.to_be_bytes();
         let mut size_len = 0usize;
@@ -94,10 +76,12 @@ pub fn len_encode(length: usize) -> Vec<u8> {
             size_len += 1
         }
 
-        let mut encoded = vec![0x80u8 + ((8 - size_len) as u8)];
-        encoded.extend_from_slice(&lenght_bytes[size_len..]);
+        output[0] = 0x80u8 + ((8 - size_len) as u8);
+        for (i, e) in lenght_bytes[size_len..].iter().enumerate() {
+            output[i+1] = *e;
+        }
 
-        encoded
+        ((8-size_len) + 1, output)
     }
 }
 
@@ -111,68 +95,6 @@ mod tests {
     
     extern crate std;
     use std::mem;
-
-    // We can test every values for u8 and u16 to assert that
-    // our function get_ith_bit is working well. We can't do
-    // the same for "bigger" types (e.g u32, .., u128).
-    #[test]
-    fn test_get_ith_bit_u8() {
-        for i in 0..=255u8 { 
-            for k in 0..8 {
-                assert_eq!(get_ith_bit(&i, k), ((i >> k) & 1) as u8);
-            }
-        }
-    }
-   
-    #[test]
-    fn test_get_ith_bit_u16() {  
-        for i in 0..=65533u16 {
-            for k in 0..16 {
-                assert_eq!(get_ith_bit(&i, k), ((i >> k) & 1) as u8);
-            }
-        }
-    }
-
-    
-    // Define a macro to generate a test function base on proptest module
-    // to perform unit/property tests on u32, ..., u128. 
-    macro_rules! test_get_ith_bit_function_for {
-        ($name:tt, $type: ty) => {
-            proptest! {
-                #[test]
-                fn $name(i in any::<$type>(), k in 0..(mem::size_of::<$type>())) {
-                    assert_eq!(get_ith_bit(&i, k), ((i >> k) & 1) as u8);
-                }
-            }
-        }
-    }
-
-    // Use the previous defined macro to generate the tests for u32, ..., u128
-    test_get_ith_bit_function_for!(test_get_ith_bit_u32, u32);
-    test_get_ith_bit_function_for!(test_get_ith_bit_u64, u64);
-    test_get_ith_bit_function_for!(test_get_ith_bit_u128, u128);
-    
-
-    
-    // Define a macro to generate a test function based on proptest module
-    // to perform unit/property tests of evaluate_poly.
-    macro_rules! test_get_byte_at_bit_for {
-        ($name:tt, $type: ty) => {
-            proptest! {
-                #[test]
-                fn $name(value in 0..(<$type>::MAX), pos in 0..(mem::size_of::<$type>())) {
-                    assert_eq!(get_byte_at_bit(&value, pos), ((value >> pos) & 0xff) as u8);
-                }
-            }
-        }
-    }
-
-    test_get_byte_at_bit_for!(test_get_byte_at_bit_u8, u8);
-    test_get_byte_at_bit_for!(test_get_byte_at_bit_u16, u16);
-    test_get_byte_at_bit_for!(test_get_byte_at_bit_u32, u32);
-    test_get_byte_at_bit_for!(test_get_byte_at_bit_u64, u64);
-    test_get_byte_at_bit_for!(test_get_byte_at_bit_u128, u128);
-
 
     // ********************************
     // Tests for `get_2bytes_at_bit` function
@@ -199,15 +121,18 @@ mod tests {
     proptest! {
         #[test]
         fn test_len_encode_le_127(l in 0..=127usize) {
-            assert_eq!(len_encode(l), vec![l as u8]);
+            let (size, arr) = len_encode(l);
+
+            assert_eq!(&arr[0..size], &[l as u8]);
         }        
     }
 
     proptest! {
         #[test]
         fn test_len_encode_ge_127(l in 128..4294967296usize) {
-            let encoded = len_encode(l);
-            
+            let (size, arr) = len_encode(l);
+            let encoded = &arr[0..size];
+
             // Ensure first bit is set to 1
             assert_eq!((encoded[0] >> 7) & 1, 1);
             

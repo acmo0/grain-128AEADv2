@@ -177,9 +177,9 @@ impl GrainCore {
     /// NIST spec. in Section 2.3.
     fn auth_2bytes(&mut self, auth_stream: &u16, data: &[u8]) {
         // Update the auth register
-        for i in 0..2 {
+        for (i, byte) in data.iter().enumerate().take(2) {
             for j in 0..8 {
-                if (data[i] >> j) & 1 == 1u8 {
+                if (byte >> j) & 1 == 1u8 {
                     self.update_auth_accumulator()
                 }
                 self.auth_register.accumulate(((auth_stream >> ((i << 3) + j)) & 1) as u8);
@@ -191,40 +191,39 @@ impl GrainCore {
     /// to Grain-128AEADv2 spec. in Section 2.5
     fn auth_additionnal_data(&mut self, authenticated_data: &[u8]) {
         // Init the output with the associated data encoded length
-        let encoded_len = {
-            if authenticated_data.is_empty() {
-                vec![0]
-            } else {
-                utils::len_encode(authenticated_data.len())
+        let (size, encoded_len_arr) = utils::len_encode(authenticated_data.len()); 
 
-            }
-        };
+        let encoded_len = &encoded_len_arr[0..size];
 
         // Authenticate the additionnal data len representation
-        let (blocks, last_block) = encoded_len.as_chunks::<2>();
-        
-        for block in blocks {
-            let (_, auth_stream) = self.get_stream16();
-            self.auth_2bytes(&auth_stream, block);
-        }
-        
-        if !last_block.is_empty() {
-            let (_, auth_stream) = self.get_stream8();
-            self.auth_byte(&auth_stream, &last_block[0]);
+        //let (blocks, last_block) = encoded_len.as_chunks::<2>();
+        for block in encoded_len.chunks(2) {
+            match *block {
+                [b1, b2] => {
+                    let (_, auth_stream) = self.get_stream16();
+                    self.auth_2bytes(&auth_stream, &[b1, b2]);
+                },
+                [b] => {
+                    let (_, auth_stream) = self.get_stream8();
+                    self.auth_byte(&auth_stream, &b);
+                }
+                _ => {}
+            }
         }
 
-        
         // Authenticate additionnal data
-        let (blocks, last_block) = authenticated_data.as_chunks::<2>();
-        
-        for block in blocks {
-            let (_, auth_stream) = self.get_stream16();
-            self.auth_2bytes(&auth_stream, block);
-        }
-        
-        if !last_block.is_empty() {
-            let (_, auth_stream) = self.get_stream8();
-            self.auth_byte(&auth_stream, &last_block[0]);
+        for block in authenticated_data.chunks(2) {
+            match *block {
+                [b1, b2] => {
+                    let (_, auth_stream) = self.get_stream16();
+                    self.auth_2bytes(&auth_stream, &[b1, b2]);
+                },
+                [b] => {
+                    let (_, auth_stream) = self.get_stream8();
+                    self.auth_byte(&auth_stream, &b);
+                }
+                _ => {}
+            }
         }
     }
 
@@ -317,17 +316,21 @@ impl GrainCore {
         self.auth_additionnal_data(authenticated_data);
     
         // Split plaintext by block of two bytes and encrypt it
-        let (blocks, last_block) = data.as_chunks::<2>();
-
-        for block in blocks {
-            output.extend(self.encrypt_and_auth_2bytes(block))
+        for block in data.chunks(2) {
+            match *block {
+                [b1, b2] => {
+                    output.extend(self.encrypt_and_auth_2bytes(&[b1, b2]));
+                },
+                [b] => {
+                    output.push(self.encrypt_and_auth_2bytes(&[b, 1u8])[0]);
+                },
+                _ => {
+                    panic!("Matched none !");
+                }
+            }
         }
 
-        // Potentially encrypt the last byte + add padding
-        if !last_block.is_empty() {
-            output.push(self.encrypt_and_auth_2bytes(&[last_block[0], 1u8])[0]);
-        } else {
-            // Add padding + encrypt/auth
+        if (data.len() & 1) == 0 {
             self.encrypt_and_auth_byte(&1u8);
         }
 
@@ -345,18 +348,25 @@ impl GrainCore {
         // Authenticate data
         self.auth_additionnal_data(authenticated_data);
 
-        let (blocks, last_block) = data.as_chunks::<2>();
 
-        for block in blocks {
-            output.extend(self.decrypt_and_auth_2bytes(block));
+        for block in data.chunks(2) {
+            match *block {
+                [b1, b2] => {
+                    output.extend(self.decrypt_and_auth_2bytes(&[b1, b2]));
+                },
+                [b] => {
+                    output.push(self.decrypt_and_auth_byte(&b));
+                    self.encrypt_and_auth_byte(&1u8);
+                },
+                _ => {
+                    panic!("Matched none !");
+                }
+            }
         }
-
-        if !last_block.is_empty() {
-            output.push(self.decrypt_and_auth_byte(&last_block[0]));
+        
+        if (data.len() & 1) == 0 {
+            self.encrypt_and_auth_byte(&1u8);
         }
-
-        // Add padding + encrypt/auth
-        self.encrypt_and_auth_byte(&1u8);
 
         if self.auth_accumulator.state.to_le_bytes().as_slice() != tag {
             return Err(Error);
@@ -432,9 +442,23 @@ impl GrainCore {
 #[cfg(test)]
 mod tests { 
     use super::*;
-    use crate::test_utils::to_test_vector;
     use proptest::prelude::*;
     
+
+    // Useful function to convert test vectors
+    // in big endian + bit reverse each byte
+    fn to_test_vector(test_vec: u128, size: usize) -> u128{
+        let mut output = 0u128;
+
+        for i in 0..size {
+            let byte = (test_vec >> i * 8) & 0xff;
+            
+            output += byte << ((size -1)* 8 - (i * 8));
+        }
+
+        output
+    }
+
 
     // Performs an initialization and an encryption
     // of an all-zero key/nonce with an empty plaintext.

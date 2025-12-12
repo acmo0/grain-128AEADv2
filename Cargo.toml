@@ -1,6 +1,6 @@
 [package]
 name = "grain-128aeadv2"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Implementation of Grain-128AEADv2 stream cipher."
 rust-version = "1.85"
@@ -31,6 +31,7 @@ rand_core = ["aead/rand_core"]
 debug = true
 
 [dev-dependencies]
+assert_no_alloc = { version = "1.1.2", default-features = false }
 proptest = "1.9.0"
 
 

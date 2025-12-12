@@ -45,7 +45,6 @@ impl Xfsr<u16> for GrainLfsr {
     ///
     /// (i.e s126 = s127, ..., s0 = s1)
     /// **The update is done on 16 bits directly (i.e 16 clocks)**
-    
     fn feedback_function(&self) -> u128 {
         (get_2bytes_at_bit(&self.state, 0) ^
             get_2bytes_at_bit(&self.state, 7) ^
@@ -64,18 +63,17 @@ impl Xfsr<u32> for GrainLfsr {
         self.state
     }
 
-    
     fn set_state(&mut self, new_value: u128) {
         self.state = new_value;
     }
+
     /// Update the grain's LFSR state according to the spec :
     /// - compute s' = s0 + s7 + s38 + s70 + s81 + s96
     /// - set the new state : s127 = s'
     /// - riht shift the remaining bits by one 
     ///
     /// (i.e s126 = s127, ..., s0 = s1)
-    /// **The update is done on 16 bits directly (i.e 16 clocks)**
-    
+    /// **The update is done on 32 bits directly (i.e 32 clocks)**
     fn feedback_function(&self) -> u128 {
         (get_4bytes_at_bit(&self.state, 0) ^
             get_4bytes_at_bit(&self.state, 7) ^
@@ -85,15 +83,7 @@ impl Xfsr<u32> for GrainLfsr {
             get_4bytes_at_bit(&self.state, 96)) as u128
     }
 }
-/*
-u32 y = (bt(12) & st(8)) ^ (st(13) & st(20)) ^ (bt(95) & st(42)) ^ (st(60) & st(79)) ^ (bt(12) & bt(95) & st(94))
-        ^ st(93) ^ bt(2) ^ bt(15) ^ bt(36) ^ bt(45) ^ bt(64) ^ bt(73) ^ bt(89);
 
-    u32 nn = st(0) ^ bt(0) ^ bt(26) ^ bt(56) ^ bt(91) ^ bt(96) ^ (bt(3) & bt(67)) ^ (bt(11) & bt(13))
-        ^ (bt(17) & bt(18)) ^ (bt(27) & bt(59)) ^ (bt(40) & bt(48)) ^ (bt(61) & bt(65)) ^ (bt(68) & bt(84))
-        ^ (bt(22) & bt(24) & bt(25)) ^ (bt(70) & bt(78) & bt(82)) ^ (bt(88) & bt(92) & bt(93) & bt(95));
-
-    u32 ln = st(0) ^ st(7) ^ st(38) ^ st(70) ^ st(81) ^ st(96);*/
 
 /// Core structure for the Grain128-AEADv2 NFSR
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]

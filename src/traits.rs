@@ -41,6 +41,27 @@ mod tests {
     use crate::utils;
     use proptest::prelude::*;
 
+    use core::ops::{
+        BitAnd,
+        Shr,
+    };
+    use num_traits::cast::{ToPrimitive, FromPrimitive};
+    use num_traits::identities::One;
+    use num_traits::sign::Unsigned;
+    // Useful function for clocking the
+    // LFSR/NFSR during the tests
+    /// Extract the next 8 bits starting from a given position.
+    fn get_byte_at_bit<T: Unsigned + BitAnd<Output = T> + One + ToPrimitive + FromPrimitive>(value: &T, index: usize) -> u8
+    where 
+        for<'a> &'a T: Shr<usize, Output = T> 
+    {
+        (
+            (value >> index) & T::from_u8(0xff).expect("Unable to get the given byte")
+        ).to_u8()
+         .expect("Unable extract the given byte index")
+    }
+
+
     struct Lfsr {
         pub(crate) state: u128,
     }
@@ -59,10 +80,10 @@ mod tests {
         }
         #[inline(always)]
         fn feedback_function(&self) -> u128 {
-            (utils::get_byte_at_bit(&self.state, 0) ^
-                utils::get_byte_at_bit(&self.state, 4) ^
-                utils::get_byte_at_bit(&self.state, 7) ^
-                utils::get_byte_at_bit(&self.state, 33)) as u128
+            (get_byte_at_bit(&self.state, 0) ^
+                get_byte_at_bit(&self.state, 4) ^
+                get_byte_at_bit(&self.state, 7) ^
+                get_byte_at_bit(&self.state, 33)) as u128
         }
     }
 
@@ -78,12 +99,12 @@ mod tests {
         #[inline(always)]
         fn feedback_function(&self) -> u128 {
             ((
-                utils::get_byte_at_bit(&self.state, 0) &
-                utils::get_byte_at_bit(&self.state, 4)
+                get_byte_at_bit(&self.state, 0) &
+                get_byte_at_bit(&self.state, 4)
             ) ^
             (
-                utils::get_byte_at_bit(&self.state, 7) &
-                utils::get_byte_at_bit(&self.state, 33)
+                get_byte_at_bit(&self.state, 7) &
+                get_byte_at_bit(&self.state, 33)
             )) as u128
         }
     }

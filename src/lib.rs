@@ -18,7 +18,7 @@
 #![cfg_attr(not(feature = "vec"), doc = "```ignore")]
 //! use grain_128aeadv2::{
 //!     Grain128, Key, Nonce,
-//!     aead::{Aead, KeyInit, AeadCore}
+//!     aead::{KeyInit, AeadCore}
 //! };
 //!
 //! // PLEASE use a RANDOM key/nonce (don't copy-paste this...)
@@ -140,8 +140,8 @@
 //! ```
 
 #[cfg(feature = "vec")]
-#[macro_use]
 extern crate alloc;
+#[cfg(feature = "vec")]
 use alloc::vec::Vec;
 
 pub use aead::{self, Tag, AeadCore, AeadInOut, Error, Key, KeyInit, KeySizeUser, Nonce, array::Array, inout::InOutBuf, consts::{U1, U8, U12, U16}, Buffer};
@@ -155,7 +155,6 @@ mod grain_core;
 mod fsr;
 mod utils;
 mod traits;
-mod test_utils;
 
 use grain_core::GrainCore;
 
