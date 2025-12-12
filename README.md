@@ -15,6 +15,8 @@ Please see installation details and doc on [crates.io](https://crates.io/crates/
 
 Pure Rust implementation of Grain-128AEADv2, a lightweight stream cipher.
 
+**It works without standard library and even without allocator if your disable the `vec` default feature** 
+
 ## Security Notes
 
 > [!CAUTION]
