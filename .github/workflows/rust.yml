@@ -1,22 +1,46 @@
-name: Rust tests
+name: grain-128aeadv2
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches: main
 
 env:
-  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: "-Dwarnings"
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        rust:
+          - 1.85.0
+          - stable
+        target:
+          - armv7a-none-eabi
+          - thumbv7em-none-eabi
+          - wasm32-unknown-unknown
     steps:
-    - uses: actions/checkout@v4
-    - name: Build with all features
-      run: cargo build --verbose --all-features
-    - name: Run tests for all features
-      run: cargo test --verbose --all-features
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          targets: ${{ matrix.target }}
+      - run: cargo build --no-default-features --release --target ${{ matrix.target }}
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - 1.85.0 # MSRV
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: cargo test --release --no-default-features --lib
+      - run: cargo test --release
+      - run: cargo test --release --all-features
+      - run: cargo test --release --no-default-features -F 'arrayvec'
