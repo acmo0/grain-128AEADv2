@@ -21,7 +21,7 @@ pub(crate) struct GrainCore {
 // function_name : the name of the generated function
 // byte_getter_function : function the retrieve n bytes from a u128
 // updater_function : the function to update the NFSR (i.e how many bytes to xor with the NFSR state)
-// output_type : the type outputed by the generated function (used also to know how to clock the xFSRs)
+// output_type : the type outputted by the generated function (used also to know how to clock the xFSRs)
 macro_rules! clock {
     ($function_name:tt, $byte_getter_function:tt, $updater_function: tt, $output_type: ty) => {
         fn $function_name(&mut self) -> $output_type {
@@ -166,15 +166,15 @@ impl GrainCore {
         }
     }
 
-    /// Authenticate additionnal data according
+    /// Authenticate additional data according
     /// to Grain-128AEADv2 spec. in Section 2.5
-    fn auth_additionnal_data(&mut self, authenticated_data: &[u8]) {
+    fn auth_additional_data(&mut self, authenticated_data: &[u8]) {
         // Init the output with the associated data encoded length
         let (size, encoded_len_arr) = utils::len_encode(authenticated_data.len());
 
         let encoded_len = &encoded_len_arr[0..size];
 
-        // Authenticate the additionnal data len representation
+        // Authenticate the additional data len representation
         //let (blocks, last_block) = encoded_len.as_chunks::<2>();
         for block in encoded_len.chunks(2) {
             match *block {
@@ -190,7 +190,7 @@ impl GrainCore {
             }
         }
 
-        // Authenticate additionnal data
+        // Authenticate additional data
         for block in authenticated_data.chunks(2) {
             match *block {
                 [b1, b2] => {
@@ -280,7 +280,7 @@ impl GrainCore {
         # Public functions to encrypt/decrypt without RustCrypto traits #
         #################################################################
     */
-    /// Encrypts and authenticate a given plaintext, and (potential) additionnal
+    /// Encrypts and authenticate a given plaintext, and (potential) additional
     /// authenticated data according to the NIST spec. in Section 2.6.1. It returns
     /// the ciphertext and the authentication tag.
     #[cfg(feature = "vec")]
@@ -291,8 +291,8 @@ impl GrainCore {
     ) -> (Vec<u8>, [u8; 8]) {
         let mut output: Vec<u8> = Vec::with_capacity(data.len());
 
-        // Auth additionnal data
-        self.auth_additionnal_data(authenticated_data);
+        // Auth additional data
+        self.auth_additional_data(authenticated_data);
 
         // Split plaintext by block of two bytes and encrypt it
         for block in data.chunks(2) {
@@ -316,7 +316,7 @@ impl GrainCore {
         (output, self.auth_accumulator.state.to_le_bytes())
     }
 
-    /// Decrypts and authenticate a given ciphertext, and (potential) additionnal
+    /// Decrypts and authenticate a given ciphertext, and (potential) additional
     /// authenticated data according to the NIST spec. in Section 2.6.1.
     /// It returns the plaintext if the given tag is correct, otherwise it fails.
     #[cfg(feature = "vec")]
@@ -329,7 +329,7 @@ impl GrainCore {
         let mut output: Vec<u8> = Vec::with_capacity(data.len());
 
         // Authenticate data
-        self.auth_additionnal_data(authenticated_data);
+        self.auth_additional_data(authenticated_data);
 
         for block in data.chunks(2) {
             match *block {
@@ -362,7 +362,7 @@ impl GrainCore {
         # Public functions to encrypt/decrypt with RustCrypto traits #
         ##############################################################
     */
-    /// Encrypts and authenticate a given plaintext, and (potential) additionnal
+    /// Encrypts and authenticate a given plaintext, and (potential) additional
     /// authenticated data according to the NIST spec. in Section 2.6.1. The
     /// encryption is done in-place to match the RustCrypto traits requirements.
     /// It returns only the tag since the encrypted data is stored in the data
@@ -372,7 +372,7 @@ impl GrainCore {
         authenticated_data: &[u8],
         data: InOutBuf<'_, '_, u8>,
     ) -> [u8; 8] {
-        self.auth_additionnal_data(authenticated_data);
+        self.auth_additional_data(authenticated_data);
 
         let (blocks, mut last_block) = data.into_chunks::<U2>();
 
@@ -392,7 +392,7 @@ impl GrainCore {
         self.auth_accumulator.state.to_le_bytes()
     }
 
-    /// Decrypts and authenticate a given ciphertext, and (potential) additionnal
+    /// Decrypts and authenticate a given ciphertext, and (potential) additional
     /// authenticated data according to the NIST spec. in Section 2.6.1. The
     /// decryption is done in-place to match the RustCrypto traits requirements.
     /// It fails if the given tag doesn't match the computed tag.
@@ -402,7 +402,7 @@ impl GrainCore {
         data: InOutBuf<'_, '_, u8>,
         tag: &[u8],
     ) -> Result<(), Error> {
-        self.auth_additionnal_data(authenticated_data);
+        self.auth_additional_data(authenticated_data);
 
         let (blocks, mut last_block) = data.into_chunks::<U2>();
 

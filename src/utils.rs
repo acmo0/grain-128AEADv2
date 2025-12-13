@@ -69,15 +69,15 @@ pub fn len_encode(length: usize) -> (usize, [u8; 9]) {
 
         (1usize, output)
     } else {
-        let lenght_bytes = length.to_be_bytes();
+        let length_bytes = length.to_be_bytes();
         let mut size_len = 0usize;
 
-        while lenght_bytes[size_len] == 0 {
+        while length_bytes[size_len] == 0 {
             size_len += 1
         }
 
         output[0] = 0x80u8 + ((8 - size_len) as u8);
-        for (i, e) in lenght_bytes[size_len..].iter().enumerate() {
+        for (i, e) in length_bytes[size_len..].iter().enumerate() {
             output[i + 1] = *e;
         }
 

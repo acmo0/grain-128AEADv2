@@ -26,13 +26,13 @@
 //!
 //! let (ciphertext, tag) = cipher.encrypt_aead(
 //!     &nonce.into(),
-//!     b"Some additionnal data",
+//!     b"Some additional data",
 //!     b"this is a secret message"
 //! );
 //!
 //! let plaintext = cipher.decrypt_aead(
 //!     &nonce.into(),
-//!     b"Some additionnal data",
+//!     b"Some additional data",
 //!     &ciphertext,
 //!     &tag
 //! ).expect("Tag verification failed");
@@ -53,13 +53,13 @@
 //! let nonce = Grain128::generate_nonce().expect("Unable to generate nonce");
 //! let (ciphertext, tag) = cipher.encrypt_aead(
 //!     &nonce,
-//!     b"Some additionnal data",
+//!     b"Some additional data",
 //!     b"this is a secret message"
 //! );
 //!
 //! let plaintext = cipher.decrypt_aead(
 //!     &nonce,
-//!     b"Some additionnal data",
+//!     b"Some additional data",
 //!     &ciphertext,
 //!     &tag
 //! ).expect("Tag verification failed");

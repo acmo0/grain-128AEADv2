@@ -127,7 +127,7 @@ macro_rules! test_bad_ct_for {
                 }
                 Err(_) => {
                     // Ensure that the buffer is filled with zeroes
-                    // in case of a tag verification faillure
+                    // in case of a tag verification failure
                     for i in 0..8 {
                         assert_eq!(buffer[i], 0);
                     }
@@ -169,7 +169,7 @@ macro_rules! test_bad_tag_for {
                 }
                 Err(_) => {
                     // Ensure that the buffer is filled with zeroes
-                    // in case of a tag verification faillure
+                    // in case of a tag verification failure
                     for i in 0..8 {
                         assert_eq!(buffer[i], 0);
                     }
