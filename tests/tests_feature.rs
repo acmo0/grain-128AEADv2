@@ -1,3 +1,4 @@
+#[cfg(any(feature = "arrayvec", feature = "alloc"))]
 pub fn to_test_vector(test_vec: u128, size: usize) -> u128 {
     let mut output = 0u128;
 
@@ -9,6 +10,7 @@ pub fn to_test_vector(test_vec: u128, size: usize) -> u128 {
     output
 }
 
+#[cfg(any(feature = "arrayvec", feature = "alloc"))]
 macro_rules! test_encrypt_for {
     ($name:tt, $type: ty) => {
         #[test]
@@ -34,6 +36,7 @@ macro_rules! test_encrypt_for {
     };
 }
 
+#[cfg(any(feature = "arrayvec", feature = "alloc"))]
 macro_rules! test_encrypt_test_vectors_for {
     ($name:tt, $type: ty) => {
         #[test]
@@ -94,6 +97,7 @@ macro_rules! test_encrypt_test_vectors_for {
     };
 }
 
+#[cfg(any(feature = "arrayvec", feature = "alloc"))]
 macro_rules! test_bad_ct_for {
     ($name:tt, $type: ty) => {
         #[test]
@@ -135,6 +139,7 @@ macro_rules! test_bad_ct_for {
     };
 }
 
+#[cfg(any(feature = "arrayvec", feature = "alloc"))]
 macro_rules! test_bad_tag_for {
     ($name:tt, $type: ty) => {
         #[test]
