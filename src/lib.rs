@@ -7,8 +7,6 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
-
-
 //! ## Quickstart
 //!
 //! Basic usage (with default `vec` feature):
@@ -39,7 +37,7 @@
 //!     &tag
 //! ).expect("Tag verification failed");
 //!
-//! assert_eq!(&plaintext, b"this is a secret message"); 
+//! assert_eq!(&plaintext, b"this is a secret message");
 //!
 //! ```
 //! With randomly sampled keys and nonces (requires `getrandom` feature):
@@ -66,7 +64,7 @@
 //!     &tag
 //! ).expect("Tag verification failed");
 //!
-//! assert_eq!(&plaintext, b"this is a secret message"); 
+//! assert_eq!(&plaintext, b"this is a secret message");
 //! ```
 //!
 //! ## In-place encryption (`arrayvec` or `alloc`)
@@ -112,10 +110,7 @@
 //! assert_eq!(buffer.as_ref(), b"a secret message");
 //! ```
 #![cfg_attr(all(feature = "getrandom", feature = "alloc"), doc = "```")]
-#![cfg_attr(
-    not(all(feature = "getrandom", feature = "alloc")),
-    doc = "```ignore"
-)]
+#![cfg_attr(not(all(feature = "getrandom", feature = "alloc")), doc = "```ignore")]
 //! use grain_128aeadv2::{
 //!     Grain128, Key, Nonce,
 //!     aead::{AeadCore, AeadInOut, KeyInit, arrayvec::ArrayVec}
@@ -144,20 +139,22 @@ extern crate alloc;
 #[cfg(feature = "vec")]
 use alloc::vec::Vec;
 
-pub use aead::{self, Tag, AeadCore, AeadInOut, Error, Key, KeyInit, KeySizeUser, Nonce, array::Array, inout::InOutBuf, consts::{U1, U8, U12, U16}, Buffer};
-use aead::TagPosition;
-
 #[cfg(feature = "zeroize")]
 pub use zeroize;
 
+pub use aead::{
+    self, AeadCore, AeadInOut, Buffer, Error, Key, KeyInit, KeySizeUser, Nonce, Tag, TagPosition,
+    array::Array,
+    consts::{U1, U8, U12, U16},
+    inout::InOutBuf,
+};
 
-mod grain_core;
 mod fsr;
-mod utils;
+mod grain_core;
 mod traits;
+mod utils;
 
 use grain_core::GrainCore;
-
 
 /// Grain-128AEADv2 cipher.
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
@@ -165,31 +162,29 @@ pub struct Grain128 {
     pub(crate) key: u128,
 }
 
-
-// Implement to define key/iv size 
-impl KeySizeUser for Grain128{
+// Implement to define key/iv size
+impl KeySizeUser for Grain128 {
     type KeySize = U16;
 }
 
 impl KeyInit for Grain128 {
     fn new(key: &Key<Self>) -> Self {
-
         let mut key_int: u128 = 0;
         for i in 0..key.len() {
             key_int |= (key[i] as u128) << (i * 8);
         }
 
-        Grain128 { key: key_int}
+        Grain128 { key: key_int }
     }
 }
 
-
+// Implement to define Nonce/Tag size and
+// where the tag is stored inside the buffer
 impl AeadCore for Grain128 {
     type NonceSize = U12;
     type TagSize = U8;
     const TAG_POSITION: TagPosition = TagPosition::Postfix;
 }
-
 
 #[cfg(feature = "vec")]
 impl Grain128 {
@@ -199,7 +194,7 @@ impl Grain128 {
     ///
     /// ```
     /// use grain_128aeadv2::{Grain128, KeyInit};
-    /// 
+    ///
     /// let key = b"my secret key !!";
     /// let cipher = Grain128::new(key.into());
     ///
@@ -210,7 +205,12 @@ impl Grain128 {
     ///     b"my secret"
     /// );
     /// ```
-    pub fn encrypt_aead(&self, nonce: &Nonce<Self>, associated_data: &[u8], plaintext: &[u8]) -> (Vec<u8>, Tag<Self>){
+    pub fn encrypt_aead(
+        &self,
+        nonce: &Nonce<Self>,
+        associated_data: &[u8],
+        plaintext: &[u8],
+    ) -> (Vec<u8>, Tag<Self>) {
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);
@@ -224,12 +224,12 @@ impl Grain128 {
     }
 
     /// Init a new grain128-AEADv2 cipher for the given nonce
-    /// and decrypts the ciphertext. You need to provide the 
+    /// and decrypts the ciphertext. You need to provide the
     /// associated data if any.
     ///
     /// ```
     /// use grain_128aeadv2::{Grain128, KeyInit};
-    /// 
+    ///
     /// let key = b"my secret key !!";
     /// let cipher = Grain128::new(key.into());
     ///
@@ -248,7 +248,13 @@ impl Grain128 {
     ////
     /// assert_eq!(decrypted, b"my secret");
     /// ```
-    pub fn decrypt_aead(&self, nonce: &Nonce<Self>, associated_data: &[u8], ciphertext: &[u8], expected_tag: &Tag<Self>) -> Result<Vec<u8>, Error> {
+    pub fn decrypt_aead(
+        &self,
+        nonce: &Nonce<Self>,
+        associated_data: &[u8],
+        ciphertext: &[u8],
+        expected_tag: &Tag<Self>,
+    ) -> Result<Vec<u8>, Error> {
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);
@@ -260,7 +266,6 @@ impl Grain128 {
     }
 }
 
-
 impl AeadInOut for Grain128 {
     fn encrypt_inout_detached(
         &self,
@@ -268,7 +273,6 @@ impl AeadInOut for Grain128 {
         associated_data: &[u8],
         buffer: InOutBuf<'_, '_, u8>,
     ) -> Result<Tag<Self>, Error> {
-
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);
@@ -288,7 +292,6 @@ impl AeadInOut for Grain128 {
         mut buffer: InOutBuf<'_, '_, u8>,
         tag: &Tag<Self>,
     ) -> Result<(), Error> {
-
         let mut nonce_int: u128 = 0;
         for i in 0..nonce.len() {
             nonce_int |= (nonce[i] as u128) << (i * 8);
@@ -296,7 +299,8 @@ impl AeadInOut for Grain128 {
 
         let mut cipher = GrainCore::new(self.key, nonce_int);
 
-        let decrypt_res = cipher.decrypt_auth_aead_inout(associated_data, buffer.reborrow(), tag.as_slice());
+        let decrypt_res =
+            cipher.decrypt_auth_aead_inout(associated_data, buffer.reborrow(), tag.as_slice());
 
         match decrypt_res {
             Ok(()) => Ok(()),
@@ -307,7 +311,5 @@ impl AeadInOut for Grain128 {
                 Err(Error)
             }
         }
-        
-
     }
 }
