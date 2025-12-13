@@ -33,8 +33,6 @@ pub(crate) trait Accumulator<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils;
-    use proptest::prelude::*;
 
     use core::ops::{BitAnd, Shr};
     use num_traits::cast::{FromPrimitive, ToPrimitive};

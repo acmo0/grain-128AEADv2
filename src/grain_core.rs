@@ -434,6 +434,7 @@ mod tests {
 
     // Useful function to convert test vectors
     // in big endian + bit reverse each byte
+    #[cfg(feature = "vec")]
     fn to_test_vector(test_vec: u128, size: usize) -> u128 {
         let mut output = 0u128;
 
