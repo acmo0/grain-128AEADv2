@@ -1,8 +1,9 @@
+#![cfg(feature = "vec")]
+
 use grain_128aeadv2::Grain128;
 use grain_128aeadv2::KeyInit;
 
 #[test]
-#[cfg(feature = "vec")]
 fn test_encrypt_decrypt_aead() {
     // Init and load keys into the cipher
     let key = [0u8; 16];
