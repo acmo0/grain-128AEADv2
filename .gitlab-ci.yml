@@ -29,6 +29,8 @@ cargo:clippy:
 
 cargo:tarpaulin:
   stage: test
+  script:
+    - cargo tarpaulin --all-features --out Xml
   coverage: '/^\d+.\d+% coverage/'
   artifacts:
     reports:
