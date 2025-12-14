@@ -1,0 +1,53 @@
+image: "rust:latest"
+
+stages:
+  - lint
+  - test
+  - build
+
+
+variables:
+  RUSTFLAGS: -Dwarnings
+
+default:
+  # cancel the job if a newer pipeline starts for the same MR or branch
+  interruptible: true
+
+# Run format check
+cargo:fmt:
+  stage: lint
+  script:
+    - rustup component add rustfmt
+    - cargo fmt --all --check
+
+# Lint using clippy
+cargo:clippy:
+  stage: lint
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets
+
+cargo:tarpaulin:
+  stage: test
+  coverage: '/^\d+.\d+% coverage/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: cobertura.xml
+
+cargo:test:
+  stage: test
+  # this job is only run if clippy passes
+  needs: ["cargo:clippy"]
+  script:
+    - cargo test --release --no-default-features --lib
+    - cargo test --release
+    - cargo test --release --all-features
+    - cargo test --release --no-default-features -F 'arrayvec'
+
+cargo:build:
+  stage: build
+  needs: ["cargo:test"]
+  script:
+    - cargo build --realse --all-features
